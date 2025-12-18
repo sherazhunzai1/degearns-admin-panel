@@ -1,26 +1,35 @@
-import { useState } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { Wallet, Shield, ArrowRight, AlertCircle, Smartphone, QrCode } from 'lucide-react'
+import { useCallback } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import { Wallet, Shield, ArrowRight, AlertCircle, QrCode, Loader2, RefreshCw, ExternalLink } from 'lucide-react'
+import {
+  loginWithXaman,
+  clearError,
+  resetLoginState,
+  demoLogin,
+} from '../store/slices/authSlice'
 
 const Login = () => {
-  const { initiateXamanLogin, handleXamanCallback, demoLogin, loading, error, qrCode, wsUrl, clearError } = useAuth()
-  const [showQR, setShowQR] = useState(false)
-  const [payloadUuid, setPayloadUuid] = useState(null)
+  const dispatch = useDispatch()
+  const {
+    loginLoading,
+    error,
+    loginStep,
+  } = useSelector((state) => state.auth)
 
-  const handleConnectWallet = async () => {
-    clearError()
-    const result = await initiateXamanLogin()
-    if (result.success) {
-      setPayloadUuid(result.uuid)
-      setShowQR(true)
-    }
-  }
+  const handleConnectWallet = useCallback(async () => {
+    dispatch(clearError())
+    dispatch(loginWithXaman())
+  }, [dispatch])
 
-  const handleSignComplete = async () => {
-    if (payloadUuid) {
-      await handleXamanCallback(payloadUuid)
-    }
-  }
+  const handleDemoLogin = useCallback(() => {
+    dispatch(demoLogin())
+  }, [dispatch])
+
+  const handleRetry = useCallback(() => {
+    dispatch(resetLoginState())
+  }, [dispatch])
+
+  const isConnecting = loginStep === 'connecting'
 
   return (
     <div className="min-h-screen bg-dark-500 flex items-center justify-center p-4">
@@ -42,22 +51,49 @@ const Login = () => {
 
         {/* Login Card */}
         <div className="glass rounded-2xl p-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          {!showQR ? (
-            <>
-              <div className="text-center mb-8">
-                <h2 className="text-xl font-semibold text-white mb-2">Admin Login</h2>
-                <p className="text-gray-400 text-sm">
-                  Connect your Xaman wallet to access the admin dashboard
-                </p>
+          <div className="text-center mb-8">
+            <h2 className="text-xl font-semibold text-white mb-2">Admin Login</h2>
+            <p className="text-gray-400 text-sm">
+              {isConnecting
+                ? 'Please complete authentication in the Xaman popup...'
+                : 'Connect your Xaman wallet to access the admin dashboard'
+              }
+            </p>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-red-400 text-sm">{error}</p>
+                <button
+                  onClick={handleRetry}
+                  className="mt-2 text-sm text-primary-400 hover:text-primary-300 flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Try again
+                </button>
               </div>
+            </div>
+          )}
 
-              {error && (
-                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-red-400 text-sm">{error}</p>
-                </div>
-              )}
-
+          {isConnecting ? (
+            // Connecting state
+            <div className="text-center py-8">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary-500/20 flex items-center justify-center animate-pulse">
+                <Loader2 className="w-10 h-10 text-primary-400 animate-spin" />
+              </div>
+              <p className="text-white font-medium mb-2">Connecting to Xaman...</p>
+              <p className="text-gray-400 text-sm mb-6">
+                A popup window should appear. Please scan the QR code or approve the request in your Xaman app.
+              </p>
+              <div className="flex items-center justify-center gap-2 text-yellow-400 text-sm">
+                <AlertCircle className="w-4 h-4" />
+                <span>Don't see the popup? Check your popup blocker.</span>
+              </div>
+            </div>
+          ) : (
+            <>
               {/* Features list */}
               <div className="space-y-4 mb-8">
                 <div className="flex items-center gap-3 text-gray-300">
@@ -83,13 +119,13 @@ const Login = () => {
               {/* Connect Button */}
               <button
                 onClick={handleConnectWallet}
-                disabled={loading}
+                disabled={loginLoading}
                 className="w-full py-4 px-6 gradient-bg rounded-xl text-white font-semibold
                          flex items-center justify-center gap-3 hover:opacity-90 transition-opacity
                          disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary-500/30"
               >
-                {loading ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                {loginLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   <>
                     <Wallet className="w-5 h-5" />
@@ -99,84 +135,37 @@ const Login = () => {
                 )}
               </button>
 
-              {/* Demo Login */}
+              {/* Xaman App Link */}
               <div className="mt-4 text-center">
-                <button
-                  onClick={demoLogin}
-                  className="text-gray-400 text-sm hover:text-primary-400 transition-colors"
+                <a
+                  href="https://xumm.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-gray-400 text-sm hover:text-primary-400 transition-colors"
                 >
-                  Demo Login (for testing)
-                </button>
+                  Don't have Xaman?
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
-            </>
-          ) : (
-            <>
-              {/* QR Code Display */}
-              <div className="text-center">
-                <h2 className="text-xl font-semibold text-white mb-2">Scan QR Code</h2>
-                <p className="text-gray-400 text-sm mb-6">
-                  Open your Xaman wallet app and scan this QR code
-                </p>
 
-                {/* QR Code placeholder */}
-                <div className="w-48 h-48 mx-auto bg-white rounded-xl p-4 mb-6">
-                  <div className="w-full h-full bg-dark-300 rounded-lg flex items-center justify-center">
-                    <QrCode className="w-24 h-24 text-gray-600" />
-                  </div>
+              {/* Divider */}
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-700"></div>
                 </div>
-
-                <div className="flex items-center justify-center gap-2 text-gray-400 text-sm mb-6">
-                  <Smartphone className="w-4 h-4" />
-                  <span>Or open Xaman app directly</span>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-dark-300 text-gray-500">or</span>
                 </div>
-
-                {wsUrl && (
-                  <a
-                    href={wsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block mb-6 text-primary-400 hover:text-primary-300 text-sm"
-                  >
-                    Open in Xaman App →
-                  </a>
-                )}
-
-                <div className="space-y-3">
-                  <button
-                    onClick={handleSignComplete}
-                    disabled={loading}
-                    className="w-full py-3 px-6 gradient-bg rounded-xl text-white font-semibold
-                             flex items-center justify-center gap-2 hover:opacity-90 transition-opacity
-                             disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? (
-                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
-                    ) : (
-                      <>
-                        I've Signed the Request
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowQR(false)
-                      clearError()
-                    }}
-                    className="w-full py-3 px-6 bg-dark-300 rounded-xl text-gray-300 font-medium
-                             hover:bg-dark-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-
-                {error && (
-                  <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-                    <p className="text-red-400 text-sm">{error}</p>
-                  </div>
-                )}
               </div>
+
+              {/* Demo Login */}
+              <button
+                onClick={handleDemoLogin}
+                className="w-full py-3 px-6 bg-dark-300 rounded-xl text-gray-300 font-medium
+                         hover:bg-dark-200 transition-colors flex items-center justify-center gap-2"
+              >
+                Demo Login (for testing)
+              </button>
             </>
           )}
         </div>
@@ -185,6 +174,23 @@ const Login = () => {
         <p className="text-center text-gray-500 text-sm mt-6">
           Only authorized admin wallets can access this panel
         </p>
+
+        {/* Setup Instructions */}
+        <div className="mt-6 p-4 rounded-xl bg-dark-400/50 border border-gray-800">
+          <p className="text-gray-400 text-xs text-center">
+            <strong className="text-gray-300">Setup:</strong> Get your Xaman API key at{' '}
+            <a
+              href="https://apps.xumm.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-400 hover:underline"
+            >
+              apps.xumm.dev
+            </a>
+            {' '}and add it to your <code className="bg-dark-300 px-1 rounded">.env</code> file as{' '}
+            <code className="bg-dark-300 px-1 rounded">VITE_XUMM_API_KEY</code>
+          </p>
+        </div>
       </div>
     </div>
   )

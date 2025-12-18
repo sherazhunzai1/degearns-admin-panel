@@ -1,22 +1,25 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useSelector, useDispatch } from 'react-redux'
+import { logout } from '../store/slices/authSlice'
 import {
   LayoutDashboard,
   Users,
   Settings,
-  Trophy,
-  Gift,
   LogOut,
   Menu,
   X,
   ChevronRight,
   Wallet,
-  ArrowLeftRight
+  Layers,
+  FolderOpen,
+  MessageSquare,
+  DollarSign
 } from 'lucide-react'
 
 const Layout = () => {
-  const { user, logout } = useAuth()
+  const dispatch = useDispatch()
+  const { user } = useSelector((state) => state.auth)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const location = useLocation()
@@ -24,15 +27,20 @@ const Layout = () => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Users', href: '/users', icon: Users },
-    { name: 'Transactions', href: '/transactions', icon: ArrowLeftRight },
-    { name: 'Leaderboards', href: '/leaderboards', icon: Trophy },
-    { name: 'Rewards', href: '/rewards', icon: Gift },
+    { name: 'Drops', href: '/drops', icon: Layers },
+    { name: 'Collections', href: '/collections', icon: FolderOpen },
+    { name: 'Posts', href: '/posts', icon: MessageSquare },
+    { name: 'Fees', href: '/fees', icon: DollarSign },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 
   const getPageTitle = () => {
     const currentNav = navigation.find(nav => nav.href === location.pathname)
     return currentNav?.name || 'Dashboard'
+  }
+
+  const handleLogout = () => {
+    dispatch(logout())
   }
 
   return (
@@ -105,7 +113,7 @@ const Layout = () => {
                 <Wallet className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">Admin</p>
+                <p className="text-sm font-medium text-white truncate">{user?.username || 'Admin'}</p>
                 <p className="text-xs text-gray-400 truncate">
                   {user?.address?.slice(0, 8)}...{user?.address?.slice(-6)}
                 </p>
@@ -117,7 +125,7 @@ const Layout = () => {
             </div>
           )}
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors w-full ${
               !sidebarOpen && 'justify-center'
             }`}
@@ -194,14 +202,14 @@ const Layout = () => {
                 <Wallet className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">Admin</p>
+                <p className="text-sm font-medium text-white truncate">{user?.username || 'Admin'}</p>
                 <p className="text-xs text-gray-400 truncate">
                   {user?.address?.slice(0, 8)}...{user?.address?.slice(-6)}
                 </p>
               </div>
             </div>
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors w-full"
             >
               <LogOut className="w-5 h-5" />
