@@ -33,9 +33,20 @@ api.interceptors.response.use(
     if (error.response) {
       switch (error.response.status) {
         case 401:
-          localStorage.removeItem('degearns_admin_token')
-          localStorage.removeItem('degearns_admin_user')
-          window.location.href = '/login'
+          // Only redirect to login if this is an auth-related endpoint
+          // or if the error message explicitly indicates invalid token
+          const isAuthEndpoint = error.config?.url?.includes('/auth/')
+          const isInvalidToken = error.response.data?.message?.toLowerCase().includes('token') ||
+                                 error.response.data?.message?.toLowerCase().includes('unauthorized') ||
+                                 error.response.data?.message?.toLowerCase().includes('authentication')
+
+          if (isAuthEndpoint || isInvalidToken) {
+            localStorage.removeItem('degearns_admin_token')
+            localStorage.removeItem('degearns_admin_user')
+            window.location.href = '/login'
+          } else {
+            console.error('API 401 error (not logging out):', error.response.data?.message)
+          }
           break
         case 403:
           console.error('Access forbidden:', error.response.data?.message)
@@ -50,6 +61,7 @@ api.interceptors.response.use(
           console.error('API error:', error.response.data)
       }
     } else if (error.request) {
+      // Network error - don't logout, just log
       console.error('Network error:', error.message)
     }
     return Promise.reject(error)
