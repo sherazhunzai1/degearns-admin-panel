@@ -428,6 +428,81 @@ export const feesAPI = {
 }
 
 // ============================================
+// Rewards Management APIs
+// ============================================
+export const rewardsAPI = {
+  // Get all top performers (traders, creators, influencers)
+  getTopPerformers: (params = {}) => {
+    const { month, year, limit = 10 } = params
+    return api.get('/admin/rewards/top-performers', { params: { month, year, limit } })
+  },
+
+  // Get top traders
+  getTopTraders: (params = {}) => {
+    const { month, year, limit = 10 } = params
+    return api.get('/admin/rewards/top-traders', { params: { month, year, limit } })
+  },
+
+  // Get top creators
+  getTopCreators: (params = {}) => {
+    const { month, year, limit = 10 } = params
+    return api.get('/admin/rewards/top-creators', { params: { month, year, limit } })
+  },
+
+  // Get top influencers
+  getTopInfluencers: (params = {}) => {
+    const { month, year, limit = 10 } = params
+    return api.get('/admin/rewards/top-influencers', { params: { month, year, limit } })
+  },
+
+  // Get reward configuration
+  getConfig: () => api.get('/admin/rewards/config'),
+
+  // Distribute rewards
+  distribute: (data) => {
+    const { month, year, category, rewards, dryRun = false } = data
+    return api.post('/admin/rewards/distribute', { month, year, category, rewards, dryRun })
+  },
+
+  // Get reward history
+  getHistory: (params = {}) => {
+    const { page = 1, limit = 20, month, year, category, walletAddress, status } = params
+    return api.get('/admin/rewards/history', {
+      params: { page, limit, month, year, category, walletAddress, status }
+    })
+  },
+
+  // Get reward summary by year
+  getSummary: (year) => api.get('/admin/rewards/summary', { params: { year } }),
+}
+
+// ============================================
+// Admin Wallet Management APIs
+// ============================================
+export const walletsAPI = {
+  // Get all admin wallets
+  getWallets: () => api.get('/admin/wallets'),
+
+  // Get platform fees wallet
+  getPlatformFeesWallet: () => api.get('/admin/wallets/platform-fees'),
+
+  // Update platform fees wallet
+  updatePlatformFeesWallet: (data) => {
+    const { walletAddress, label, description } = data
+    return api.put('/admin/wallets/platform-fees', { walletAddress, label, description })
+  },
+
+  // Create or update admin wallet
+  createWallet: (data) => {
+    const { walletAddress, type, label, description, isActive = true } = data
+    return api.post('/admin/wallets', { walletAddress, type, label, description, isActive })
+  },
+
+  // Delete admin wallet
+  deleteWallet: (walletId) => api.delete(`/admin/wallets/${walletId}`),
+}
+
+// ============================================
 // Auth APIs (kept for reference, using Xaman direct auth)
 // ============================================
 export const authAPI = {

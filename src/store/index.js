@@ -7,6 +7,7 @@ import collectionsReducer from './slices/collectionsSlice'
 import postsReducer from './slices/postsSlice'
 import feesReducer from './slices/feesSlice'
 import settingsReducer from './slices/settingsSlice'
+import rewardsReducer from './slices/rewardsSlice'
 
 export const store = configureStore({
   reducer: {
@@ -18,6 +19,7 @@ export const store = configureStore({
     posts: postsReducer,
     fees: feesReducer,
     settings: settingsReducer,
+    rewards: rewardsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
