@@ -6,14 +6,15 @@ import {
   LayoutDashboard,
   Users,
   Settings,
-  Trophy,
-  Gift,
   LogOut,
   Menu,
   X,
   ChevronRight,
   Wallet,
-  ArrowLeftRight
+  Layers,
+  FolderOpen,
+  MessageSquare,
+  DollarSign
 } from 'lucide-react'
 
 const Layout = () => {
@@ -26,9 +27,10 @@ const Layout = () => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Users', href: '/users', icon: Users },
-    { name: 'Transactions', href: '/transactions', icon: ArrowLeftRight },
-    { name: 'Leaderboards', href: '/leaderboards', icon: Trophy },
-    { name: 'Rewards', href: '/rewards', icon: Gift },
+    { name: 'Drops', href: '/drops', icon: Layers },
+    { name: 'Collections', href: '/collections', icon: FolderOpen },
+    { name: 'Posts', href: '/posts', icon: MessageSquare },
+    { name: 'Fees', href: '/fees', icon: DollarSign },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 

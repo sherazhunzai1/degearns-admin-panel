@@ -1,84 +1,148 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import { usersAPI } from '../../services/api'
 
-const initialState = {
-  users: [],
-  selectedUser: null,
-  pagination: {
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 0,
-  },
-  filters: {
-    search: '',
-    status: 'all',
-    role: 'all',
-  },
-  loading: false,
-  actionLoading: false,
-  error: null,
-}
-
-// Fetch users with pagination and filters
+// Async thunks
 export const fetchUsers = createAsyncThunk(
   'users/fetchUsers',
-  async (params, { rejectWithValue, getState }) => {
+  async (params = {}, { rejectWithValue }) => {
     try {
-      const { users } = getState()
-      const queryParams = {
-        page: params?.page || users.pagination.page,
-        limit: params?.limit || users.pagination.limit,
-        search: params?.search ?? users.filters.search,
-        status: params?.status ?? users.filters.status,
-        role: params?.role ?? users.filters.role,
-      }
-      const response = await usersAPI.getUsers(queryParams)
-      return response.data
+      const response = await usersAPI.getUsers(params)
+      return response.data.data
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch users')
     }
   }
 )
 
-// Fetch single user details
+export const fetchUserStatistics = createAsyncThunk(
+  'users/fetchStatistics',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await usersAPI.getStatistics()
+      return response.data.data
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch user statistics')
+    }
+  }
+)
+
 export const fetchUserDetails = createAsyncThunk(
   'users/fetchUserDetails',
-  async (userId, { rejectWithValue }) => {
+  async (walletAddress, { rejectWithValue }) => {
     try {
-      const response = await usersAPI.getUser(userId)
-      return response.data
+      const response = await usersAPI.getUser(walletAddress)
+      return response.data.data
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch user details')
     }
   }
 )
 
-// Block user
-export const blockUser = createAsyncThunk(
-  'users/blockUser',
-  async ({ userId, reason }, { rejectWithValue }) => {
+export const updateUserRole = createAsyncThunk(
+  'users/updateRole',
+  async ({ walletAddress, role, reason }, { rejectWithValue }) => {
     try {
-      const response = await usersAPI.blockUser(userId, reason)
-      return { userId, ...response.data }
+      const response = await usersAPI.updateRole(walletAddress, role, reason)
+      return { walletAddress, ...response.data.data }
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to block user')
+      return rejectWithValue(error.response?.data?.message || 'Failed to update user role')
     }
   }
 )
 
-// Unblock user
-export const unblockUser = createAsyncThunk(
-  'users/unblockUser',
-  async (userId, { rejectWithValue }) => {
+export const updateUserVerification = createAsyncThunk(
+  'users/updateVerification',
+  async ({ walletAddress, isVerified, reason }, { rejectWithValue }) => {
     try {
-      const response = await usersAPI.unblockUser(userId)
-      return { userId, ...response.data }
+      const response = await usersAPI.updateVerification(walletAddress, isVerified, reason)
+      return { walletAddress, isVerified, ...response.data.data }
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to unblock user')
+      return rejectWithValue(error.response?.data?.message || 'Failed to update verification')
     }
   }
 )
+
+export const banUser = createAsyncThunk(
+  'users/banUser',
+  async ({ walletAddress, reason }, { rejectWithValue }) => {
+    try {
+      const response = await usersAPI.banUser(walletAddress, reason)
+      return { walletAddress, ...response.data.data }
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to ban user')
+    }
+  }
+)
+
+export const unbanUser = createAsyncThunk(
+  'users/unbanUser',
+  async ({ walletAddress, reason }, { rejectWithValue }) => {
+    try {
+      const response = await usersAPI.unbanUser(walletAddress, reason)
+      return { walletAddress, ...response.data.data }
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to unban user')
+    }
+  }
+)
+
+export const deleteUser = createAsyncThunk(
+  'users/deleteUser',
+  async ({ walletAddress, reason }, { rejectWithValue }) => {
+    try {
+      await usersAPI.deleteUser(walletAddress, reason)
+      return { walletAddress }
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to delete user')
+    }
+  }
+)
+
+export const bulkVerifyUsers = createAsyncThunk(
+  'users/bulkVerify',
+  async ({ walletAddresses, isVerified, reason }, { rejectWithValue }) => {
+    try {
+      const response = await usersAPI.bulkVerify(walletAddresses, isVerified, reason)
+      return { walletAddresses, isVerified, ...response.data.data }
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to bulk verify users')
+    }
+  }
+)
+
+const initialState = {
+  users: [],
+  selectedUser: null,
+  statistics: {
+    totalUsers: 0,
+    totalAdmins: 0,
+    verifiedUsers: 0,
+    bannedUsers: 0,
+    newUsers: {
+      today: 0,
+      thisWeek: 0,
+      thisMonth: 0
+    }
+  },
+  pagination: {
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0,
+  },
+  filters: {
+    search: '',
+    role: undefined,
+    isVerified: undefined,
+    isBanned: undefined,
+    sortBy: 'createdAt',
+    sortOrder: 'DESC',
+  },
+  loading: false,
+  statsLoading: false,
+  actionLoading: false,
+  error: null,
+}
 
 const usersSlice = createSlice({
   name: 'users',
@@ -89,43 +153,13 @@ const usersSlice = createSlice({
     },
     setFilters: (state, action) => {
       state.filters = { ...state.filters, ...action.payload }
-      state.pagination.page = 1 // Reset to first page on filter change
+      state.pagination.page = 1
     },
     setPage: (state, action) => {
       state.pagination.page = action.payload
     },
     clearSelectedUser: (state) => {
       state.selectedUser = null
-    },
-    // For demo/mock data
-    setMockUsers: (state) => {
-      const mockUsers = []
-      const roles = ['creator', 'trader', 'collector', 'influencer', 'user']
-      const statuses = ['active', 'active', 'active', 'blocked', 'pending']
-
-      for (let i = 1; i <= 50; i++) {
-        mockUsers.push({
-          id: i,
-          address: `rUser${Math.random().toString(36).substring(2, 15)}`,
-          username: i <= 5 ? ['CryptoArtist', 'NFTTrader', 'CryptoInfluencer', 'RareCollector', 'NewCollector'][i - 1] : `User${i}`,
-          email: `user${i}@email.com`,
-          status: statuses[Math.floor(Math.random() * statuses.length)],
-          role: roles[Math.floor(Math.random() * roles.length)],
-          joinDate: '2024-05-15',
-          totalVolume: `${Math.floor(Math.random() * 500000)} XRP`,
-          nftsOwned: Math.floor(Math.random() * 500),
-          nftsCreated: Math.floor(Math.random() * 50),
-          lastActive: `${Math.floor(Math.random() * 24)} hours ago`,
-        })
-      }
-
-      state.users = mockUsers
-      state.pagination = {
-        page: 1,
-        limit: 10,
-        total: 50,
-        totalPages: 5,
-      }
     },
   },
   extraReducers: (builder) => {
@@ -137,16 +171,31 @@ const usersSlice = createSlice({
       })
       .addCase(fetchUsers.fulfilled, (state, action) => {
         state.loading = false
-        state.users = action.payload.users || action.payload.data || []
-        state.pagination = {
-          page: action.payload.page || 1,
-          limit: action.payload.limit || 10,
-          total: action.payload.total || 0,
-          totalPages: action.payload.totalPages || 0,
+        state.users = action.payload?.users || []
+        state.pagination = action.payload?.pagination || {
+          page: 1,
+          limit: 20,
+          total: 0,
+          totalPages: 0,
         }
       })
       .addCase(fetchUsers.rejected, (state, action) => {
         state.loading = false
+        state.error = action.payload
+      })
+
+      // Fetch Statistics
+      .addCase(fetchUserStatistics.pending, (state) => {
+        state.statsLoading = true
+      })
+      .addCase(fetchUserStatistics.fulfilled, (state, action) => {
+        state.statsLoading = false
+        if (action.payload) {
+          state.statistics = action.payload
+        }
+      })
+      .addCase(fetchUserStatistics.rejected, (state, action) => {
+        state.statsLoading = false
         state.error = action.payload
       })
 
@@ -163,45 +212,118 @@ const usersSlice = createSlice({
         state.error = action.payload
       })
 
-      // Block User
-      .addCase(blockUser.pending, (state) => {
+      // Update Role
+      .addCase(updateUserRole.pending, (state) => {
         state.actionLoading = true
       })
-      .addCase(blockUser.fulfilled, (state, action) => {
+      .addCase(updateUserRole.fulfilled, (state, action) => {
         state.actionLoading = false
-        const index = state.users.findIndex((u) => u.id === action.payload.userId)
-        if (index !== -1) {
-          state.users[index].status = 'blocked'
+        const index = state.users.findIndex((u) => u.walletAddress === action.payload.walletAddress)
+        if (index !== -1 && action.payload.user) {
+          state.users[index] = action.payload.user
         }
-        if (state.selectedUser?.id === action.payload.userId) {
-          state.selectedUser.status = 'blocked'
+        if (state.selectedUser?.walletAddress === action.payload.walletAddress && action.payload.user) {
+          state.selectedUser = { ...state.selectedUser, ...action.payload.user }
         }
       })
-      .addCase(blockUser.rejected, (state, action) => {
+      .addCase(updateUserRole.rejected, (state, action) => {
         state.actionLoading = false
         state.error = action.payload
       })
 
-      // Unblock User
-      .addCase(unblockUser.pending, (state) => {
+      // Update Verification
+      .addCase(updateUserVerification.pending, (state) => {
         state.actionLoading = true
       })
-      .addCase(unblockUser.fulfilled, (state, action) => {
+      .addCase(updateUserVerification.fulfilled, (state, action) => {
         state.actionLoading = false
-        const index = state.users.findIndex((u) => u.id === action.payload.userId)
+        const index = state.users.findIndex((u) => u.walletAddress === action.payload.walletAddress)
         if (index !== -1) {
-          state.users[index].status = 'active'
+          state.users[index].isVerified = action.payload.isVerified
         }
-        if (state.selectedUser?.id === action.payload.userId) {
-          state.selectedUser.status = 'active'
+        if (state.selectedUser?.walletAddress === action.payload.walletAddress) {
+          state.selectedUser.isVerified = action.payload.isVerified
         }
       })
-      .addCase(unblockUser.rejected, (state, action) => {
+      .addCase(updateUserVerification.rejected, (state, action) => {
+        state.actionLoading = false
+        state.error = action.payload
+      })
+
+      // Ban User
+      .addCase(banUser.pending, (state) => {
+        state.actionLoading = true
+      })
+      .addCase(banUser.fulfilled, (state, action) => {
+        state.actionLoading = false
+        const index = state.users.findIndex((u) => u.walletAddress === action.payload.walletAddress)
+        if (index !== -1) {
+          state.users[index].isBanned = true
+        }
+        if (state.selectedUser?.walletAddress === action.payload.walletAddress) {
+          state.selectedUser.isBanned = true
+        }
+      })
+      .addCase(banUser.rejected, (state, action) => {
+        state.actionLoading = false
+        state.error = action.payload
+      })
+
+      // Unban User
+      .addCase(unbanUser.pending, (state) => {
+        state.actionLoading = true
+      })
+      .addCase(unbanUser.fulfilled, (state, action) => {
+        state.actionLoading = false
+        const index = state.users.findIndex((u) => u.walletAddress === action.payload.walletAddress)
+        if (index !== -1) {
+          state.users[index].isBanned = false
+        }
+        if (state.selectedUser?.walletAddress === action.payload.walletAddress) {
+          state.selectedUser.isBanned = false
+        }
+      })
+      .addCase(unbanUser.rejected, (state, action) => {
+        state.actionLoading = false
+        state.error = action.payload
+      })
+
+      // Delete User
+      .addCase(deleteUser.pending, (state) => {
+        state.actionLoading = true
+      })
+      .addCase(deleteUser.fulfilled, (state, action) => {
+        state.actionLoading = false
+        state.users = state.users.filter((u) => u.walletAddress !== action.payload.walletAddress)
+        if (state.selectedUser?.walletAddress === action.payload.walletAddress) {
+          state.selectedUser = null
+        }
+      })
+      .addCase(deleteUser.rejected, (state, action) => {
+        state.actionLoading = false
+        state.error = action.payload
+      })
+
+      // Bulk Verify
+      .addCase(bulkVerifyUsers.pending, (state) => {
+        state.actionLoading = true
+      })
+      .addCase(bulkVerifyUsers.fulfilled, (state, action) => {
+        state.actionLoading = false
+        const { walletAddresses, isVerified } = action.payload
+        state.users = state.users.map((user) => {
+          if (walletAddresses.includes(user.walletAddress)) {
+            return { ...user, isVerified }
+          }
+          return user
+        })
+      })
+      .addCase(bulkVerifyUsers.rejected, (state, action) => {
         state.actionLoading = false
         state.error = action.payload
       })
   },
 })
 
-export const { clearError, setFilters, setPage, clearSelectedUser, setMockUsers } = usersSlice.actions
+export const { clearError, setFilters, setPage, clearSelectedUser } = usersSlice.actions
 export default usersSlice.reducer

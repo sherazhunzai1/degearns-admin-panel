@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // Base API configuration
-const API_BASE_URL = 'https://api.degearns.com/api/v1/admin'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.degearns.com/api/v1'
 
 // Create axios instance with default config
 const api = axios.create({
@@ -31,31 +31,25 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
-      // Handle specific error codes
       switch (error.response.status) {
         case 401:
-          // Unauthorized - clear token and redirect to login
           localStorage.removeItem('degearns_admin_token')
           localStorage.removeItem('degearns_admin_user')
           window.location.href = '/login'
           break
         case 403:
-          // Forbidden
-          console.error('Access forbidden')
+          console.error('Access forbidden:', error.response.data?.message)
           break
         case 404:
-          // Not found
           console.error('Resource not found')
           break
         case 500:
-          // Server error
           console.error('Server error')
           break
         default:
           console.error('API error:', error.response.data)
       }
     } else if (error.request) {
-      // Network error
       console.error('Network error:', error.message)
     }
     return Promise.reject(error)
@@ -64,148 +58,370 @@ api.interceptors.response.use(
 
 export default api
 
-// Auth API endpoints
+// ============================================
+// Dashboard & Analytics APIs
+// ============================================
+export const dashboardAPI = {
+  // Get dashboard overview stats
+  getOverview: () => api.get('/admin/dashboard'),
+
+  // Get growth analytics
+  getGrowth: (period = '30d') =>
+    api.get('/admin/dashboard/growth', { params: { period } }),
+
+  // Get top creators
+  getTopCreators: (metric = 'mints', limit = 10) =>
+    api.get('/admin/dashboard/top-creators', { params: { metric, limit } }),
+
+  // Get recent admin activities
+  getActivities: (params = {}) => {
+    const { page = 1, limit = 20, action, targetType, adminWallet } = params
+    return api.get('/admin/dashboard/activities', {
+      params: { page, limit, action, targetType, adminWallet }
+    })
+  },
+
+  // Get platform health
+  getHealth: () => api.get('/admin/dashboard/health'),
+
+  // Get revenue breakdown
+  getRevenue: (period = '30d') =>
+    api.get('/admin/dashboard/revenue', { params: { period } }),
+}
+
+// ============================================
+// User Management APIs
+// ============================================
+export const usersAPI = {
+  // Get all users with pagination and filters
+  getUsers: (params = {}) => {
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      role,
+      isVerified,
+      isBanned,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
+    } = params
+    return api.get('/admin/users', {
+      params: { page, limit, search, role, isVerified, isBanned, sortBy, sortOrder }
+    })
+  },
+
+  // Get user statistics
+  getStatistics: () => api.get('/admin/users/statistics'),
+
+  // Get user by wallet address
+  getUser: (walletAddress) => api.get(`/admin/users/${walletAddress}`),
+
+  // Update user role (super admin only)
+  updateRole: (walletAddress, role, reason) =>
+    api.put(`/admin/users/${walletAddress}/role`, { role, reason }),
+
+  // Verify/Unverify user
+  updateVerification: (walletAddress, isVerified, reason) =>
+    api.put(`/admin/users/${walletAddress}/verify`, { isVerified, reason }),
+
+  // Ban user
+  banUser: (walletAddress, reason) =>
+    api.put(`/admin/users/${walletAddress}/ban`, { reason }),
+
+  // Unban user
+  unbanUser: (walletAddress, reason) =>
+    api.put(`/admin/users/${walletAddress}/unban`, { reason }),
+
+  // Delete user (super admin only)
+  deleteUser: (walletAddress, reason) =>
+    api.delete(`/admin/users/${walletAddress}`, { data: { reason } }),
+
+  // Bulk verify users
+  bulkVerify: (walletAddresses, isVerified, reason) =>
+    api.post('/admin/users/bulk-verify', { walletAddresses, isVerified, reason }),
+}
+
+// ============================================
+// Drop Management APIs
+// ============================================
+export const dropsAPI = {
+  // Get all drops with pagination and filters
+  getDrops: (params = {}) => {
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      status,
+      platformFeesStatus,
+      creatorWallet,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
+    } = params
+    return api.get('/admin/drops', {
+      params: { page, limit, search, status, platformFeesStatus, creatorWallet, sortBy, sortOrder }
+    })
+  },
+
+  // Get drop statistics
+  getStatistics: () => api.get('/admin/drops/statistics'),
+
+  // Get drops with pending fees
+  getPendingFees: (params = {}) => {
+    const { page = 1, limit = 20 } = params
+    return api.get('/admin/drops/pending-fees', { params: { page, limit } })
+  },
+
+  // Get drop by ID
+  getDrop: (dropId) => api.get(`/admin/drops/${dropId}`),
+
+  // Update drop
+  updateDrop: (dropId, data) => api.put(`/admin/drops/${dropId}`, data),
+
+  // Update drop status
+  updateStatus: (dropId, status, reason) =>
+    api.put(`/admin/drops/${dropId}/status`, { status, reason }),
+
+  // Pause drop
+  pauseDrop: (dropId, reason) =>
+    api.put(`/admin/drops/${dropId}/pause`, { reason }),
+
+  // Resume drop
+  resumeDrop: (dropId, status = 'active', enableMinting = true, reason) =>
+    api.put(`/admin/drops/${dropId}/resume`, { status, enableMinting, reason }),
+
+  // Update platform fees status
+  updateFeesStatus: (dropId, platformFeesStatus, transactionHash, reason) =>
+    api.put(`/admin/drops/${dropId}/fees-status`, { platformFeesStatus, transactionHash, reason }),
+
+  // Delete drop (super admin only)
+  deleteDrop: (dropId, reason) =>
+    api.delete(`/admin/drops/${dropId}`, { data: { reason } }),
+
+  // Get drop mints
+  getDropMints: (dropId, params = {}) => {
+    const { page = 1, limit = 20 } = params
+    return api.get(`/admin/drops/${dropId}/mints`, { params: { page, limit } })
+  },
+
+  // Get drop allowlist
+  getDropAllowlist: (dropId, params = {}) => {
+    const { page = 1, limit = 50 } = params
+    return api.get(`/admin/drops/${dropId}/allowlist`, { params: { page, limit } })
+  },
+}
+
+// ============================================
+// Collection Management APIs
+// ============================================
+export const collectionsAPI = {
+  // Get all collections with pagination and filters
+  getCollections: (params = {}) => {
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      category,
+      isVerified,
+      creatorWallet,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
+    } = params
+    return api.get('/admin/collections', {
+      params: { page, limit, search, category, isVerified, creatorWallet, sortBy, sortOrder }
+    })
+  },
+
+  // Get collection statistics
+  getStatistics: () => api.get('/admin/collections/statistics'),
+
+  // Get pending verification collections
+  getPendingVerification: (params = {}) => {
+    const { page = 1, limit = 20 } = params
+    return api.get('/admin/collections/pending-verification', { params: { page, limit } })
+  },
+
+  // Get collection by ID
+  getCollection: (collectionId) => api.get(`/admin/collections/${collectionId}`),
+
+  // Update collection
+  updateCollection: (collectionId, data) => api.put(`/admin/collections/${collectionId}`, data),
+
+  // Verify/Unverify collection
+  updateVerification: (collectionId, isVerified, reason) =>
+    api.put(`/admin/collections/${collectionId}/verify`, { isVerified, reason }),
+
+  // Delete collection (super admin only)
+  deleteCollection: (collectionId, reason) =>
+    api.delete(`/admin/collections/${collectionId}`, { data: { reason } }),
+
+  // Bulk verify collections
+  bulkVerify: (collectionIds, isVerified, reason) =>
+    api.post('/admin/collections/bulk-verify', { collectionIds, isVerified, reason }),
+}
+
+// ============================================
+// Post Moderation APIs
+// ============================================
+export const postsAPI = {
+  // Get all posts with pagination and filters
+  getPosts: (params = {}) => {
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      postType,
+      visibility,
+      isActive,
+      authorWallet,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
+    } = params
+    return api.get('/admin/posts', {
+      params: { page, limit, search, postType, visibility, isActive, authorWallet, sortBy, sortOrder }
+    })
+  },
+
+  // Get post statistics
+  getStatistics: () => api.get('/admin/posts/statistics'),
+
+  // Get flagged content
+  getFlagged: (params = {}) => {
+    const { page = 1, limit = 20 } = params
+    return api.get('/admin/posts/flagged', { params: { page, limit } })
+  },
+
+  // Get post by ID
+  getPost: (postId) => api.get(`/admin/posts/${postId}`),
+
+  // Toggle post visibility
+  toggleVisibility: (postId, isActive, reason) =>
+    api.put(`/admin/posts/${postId}/visibility`, { isActive, reason }),
+
+  // Delete post
+  deletePost: (postId, reason) =>
+    api.delete(`/admin/posts/${postId}`, { data: { reason } }),
+
+  // Get all comments
+  getComments: (params = {}) => {
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      postId,
+      authorWallet,
+      isActive,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
+    } = params
+    return api.get('/admin/comments', {
+      params: { page, limit, search, postId, authorWallet, isActive, sortBy, sortOrder }
+    })
+  },
+
+  // Delete comment
+  deleteComment: (commentId, reason) =>
+    api.delete(`/admin/comments/${commentId}`, { data: { reason } }),
+
+  // Bulk delete posts
+  bulkDelete: (postIds, reason) =>
+    api.post('/admin/posts/bulk-delete', { postIds, reason }),
+
+  // Bulk hide posts
+  bulkHide: (postIds, isActive, reason) =>
+    api.post('/admin/posts/bulk-hide', { postIds, isActive, reason }),
+}
+
+// ============================================
+// Platform Settings APIs
+// ============================================
+export const settingsAPI = {
+  // Initialize default settings (super admin only)
+  initialize: () => api.post('/admin/settings/initialize'),
+
+  // Get all settings
+  getSettings: (params = {}) => {
+    const { category, isPublic } = params
+    return api.get('/admin/settings', { params: { category, isPublic } })
+  },
+
+  // Get public settings (no auth required)
+  getPublicSettings: () => api.get('/admin/settings/public'),
+
+  // Get setting by key
+  getSetting: (key) => api.get(`/admin/settings/${key}`),
+
+  // Update setting (super admin only)
+  updateSetting: (key, data) => api.put(`/admin/settings/${key}`, data),
+
+  // Reset setting to default (super admin only)
+  resetSetting: (key, reason) =>
+    api.put(`/admin/settings/${key}/reset`, { reason }),
+
+  // Create setting (super admin only)
+  createSetting: (data) => api.post('/admin/settings', data),
+
+  // Delete setting (super admin only)
+  deleteSetting: (key, reason) =>
+    api.delete(`/admin/settings/${key}`, { data: { reason } }),
+
+  // Bulk update settings (super admin only)
+  bulkUpdate: (settings, reason) =>
+    api.put('/admin/settings/bulk', { settings, reason }),
+}
+
+// ============================================
+// Fee Management APIs
+// ============================================
+export const feesAPI = {
+  // Get fees overview
+  getOverview: () => api.get('/admin/fees'),
+
+  // Get fee transactions
+  getTransactions: (params = {}) => {
+    const { page = 1, limit = 20, status, sortBy = 'updatedAt', sortOrder = 'DESC' } = params
+    return api.get('/admin/fees/transactions', {
+      params: { page, limit, status, sortBy, sortOrder }
+    })
+  },
+
+  // Get fee statistics
+  getStatistics: (period = '30d') =>
+    api.get('/admin/fees/statistics', { params: { period } }),
+
+  // Get pending fees
+  getPending: (params = {}) => {
+    const { page = 1, limit = 20 } = params
+    return api.get('/admin/fees/pending', { params: { page, limit } })
+  },
+
+  // Get failed fees
+  getFailed: (params = {}) => {
+    const { page = 1, limit = 20 } = params
+    return api.get('/admin/fees/failed', { params: { page, limit } })
+  },
+
+  // Export fee report
+  exportReport: (params = {}) => {
+    const { startDate, endDate, status } = params
+    return api.get('/admin/fees/export', { params: { startDate, endDate, status } })
+  },
+
+  // Mark fees as paid
+  markPaid: (dropId, transactionHash, reason) =>
+    api.put(`/admin/fees/${dropId}/mark-paid`, { transactionHash, reason }),
+
+  // Mark fees as refunded (super admin only)
+  markRefunded: (dropId, transactionHash, reason) =>
+    api.put(`/admin/fees/${dropId}/mark-refunded`, { transactionHash, reason }),
+}
+
+// ============================================
+// Auth APIs (kept for reference, using Xaman direct auth)
+// ============================================
 export const authAPI = {
-  // Initialize Xaman login - get QR code payload
-  initiateXamanLogin: () => api.post('/auth/xaman/init'),
-
-  // Verify Xaman signature and get auth token
-  verifyXamanSignature: (payloadId, signature) =>
-    api.post('/auth/xaman/verify', { payloadId, signature }),
-
-  // Check if wallet is authorized admin
-  checkAdminAccess: (walletAddress) =>
-    api.post('/auth/check-admin', { walletAddress }),
-
   // Get current admin profile
   getProfile: () => api.get('/auth/profile'),
 
   // Logout
   logout: () => api.post('/auth/logout'),
-}
-
-// Dashboard API endpoints
-export const dashboardAPI = {
-  // Get dashboard stats
-  getStats: () => api.get('/dashboard/stats'),
-
-  // Get volume chart data
-  getVolumeData: (period = '7d') => api.get(`/dashboard/volume?period=${period}`),
-
-  // Get NFT category distribution
-  getCategoryData: () => api.get('/dashboard/categories'),
-
-  // Get user activity data
-  getUserActivity: (period = '7d') => api.get(`/dashboard/user-activity?period=${period}`),
-
-  // Get recent transactions
-  getRecentTransactions: (limit = 5) => api.get(`/dashboard/recent-transactions?limit=${limit}`),
-}
-
-// Users API endpoints
-export const usersAPI = {
-  // Get all users with pagination and filters
-  getUsers: (params = {}) => {
-    const { page = 1, limit = 10, search = '', status = 'all', role = 'all' } = params
-    return api.get('/users', { params: { page, limit, search, status, role } })
-  },
-
-  // Get single user details
-  getUser: (userId) => api.get(`/users/${userId}`),
-
-  // Block user
-  blockUser: (userId, reason = '') => api.post(`/users/${userId}/block`, { reason }),
-
-  // Unblock user
-  unblockUser: (userId) => api.post(`/users/${userId}/unblock`),
-
-  // Get user activity history
-  getUserActivity: (userId) => api.get(`/users/${userId}/activity`),
-
-  // Get user NFTs
-  getUserNFTs: (userId) => api.get(`/users/${userId}/nfts`),
-
-  // Get user transactions
-  getUserTransactions: (userId) => api.get(`/users/${userId}/transactions`),
-}
-
-// Transactions API endpoints
-export const transactionsAPI = {
-  // Get all transactions with pagination and filters
-  getTransactions: (params = {}) => {
-    const { page = 1, limit = 15, search = '', type = 'all', status = 'all', dateRange = '7d' } = params
-    return api.get('/transactions', { params: { page, limit, search, type, status, dateRange } })
-  },
-
-  // Get single transaction details
-  getTransaction: (txId) => api.get(`/transactions/${txId}`),
-
-  // Get transaction stats
-  getTransactionStats: (dateRange = '7d') => api.get(`/transactions/stats?dateRange=${dateRange}`),
-}
-
-// Leaderboards API endpoints
-export const leaderboardsAPI = {
-  // Get top traders
-  getTopTraders: (period = '30d', limit = 10) =>
-    api.get('/leaderboards/traders', { params: { period, limit } }),
-
-  // Get top creators
-  getTopCreators: (period = '30d', limit = 10) =>
-    api.get('/leaderboards/creators', { params: { period, limit } }),
-
-  // Get top influencers
-  getTopInfluencers: (period = '30d', limit = 10) =>
-    api.get('/leaderboards/influencers', { params: { period, limit } }),
-}
-
-// Rewards API endpoints
-export const rewardsAPI = {
-  // Get reward pool balance
-  getRewardPoolBalance: () => api.get('/rewards/pool-balance'),
-
-  // Get reward history
-  getRewardHistory: (params = {}) => {
-    const { page = 1, limit = 10, status = 'all' } = params
-    return api.get('/rewards/history', { params: { page, limit, status } })
-  },
-
-  // Send individual reward
-  sendReward: (data) => api.post('/rewards/send', data),
-
-  // Send batch rewards
-  sendBatchReward: (data) => api.post('/rewards/batch-send', data),
-
-  // Get reward presets
-  getRewardPresets: () => api.get('/rewards/presets'),
-}
-
-// Settings API endpoints
-export const settingsAPI = {
-  // Get platform settings
-  getPlatformSettings: () => api.get('/settings/platform'),
-
-  // Update platform settings
-  updatePlatformSettings: (data) => api.put('/settings/platform', data),
-
-  // Get wallet settings
-  getWalletSettings: () => api.get('/settings/wallets'),
-
-  // Update wallet settings
-  updateWalletSettings: (data) => api.put('/settings/wallets', data),
-
-  // Get notification settings
-  getNotificationSettings: () => api.get('/settings/notifications'),
-
-  // Update notification settings
-  updateNotificationSettings: (data) => api.put('/settings/notifications', data),
-
-  // Get admin list
-  getAdminList: () => api.get('/settings/admins'),
-
-  // Add admin wallet
-  addAdminWallet: (walletAddress) => api.post('/settings/admins', { walletAddress }),
-
-  // Remove admin wallet
-  removeAdminWallet: (walletAddress) => api.delete(`/settings/admins/${walletAddress}`),
 }

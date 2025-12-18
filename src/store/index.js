@@ -2,9 +2,10 @@ import { configureStore } from '@reduxjs/toolkit'
 import authReducer from './slices/authSlice'
 import dashboardReducer from './slices/dashboardSlice'
 import usersReducer from './slices/usersSlice'
-import transactionsReducer from './slices/transactionsSlice'
-import leaderboardsReducer from './slices/leaderboardsSlice'
-import rewardsReducer from './slices/rewardsSlice'
+import dropsReducer from './slices/dropsSlice'
+import collectionsReducer from './slices/collectionsSlice'
+import postsReducer from './slices/postsSlice'
+import feesReducer from './slices/feesSlice'
 import settingsReducer from './slices/settingsSlice'
 
 export const store = configureStore({
@@ -12,17 +13,16 @@ export const store = configureStore({
     auth: authReducer,
     dashboard: dashboardReducer,
     users: usersReducer,
-    transactions: transactionsReducer,
-    leaderboards: leaderboardsReducer,
-    rewards: rewardsReducer,
+    drops: dropsReducer,
+    collections: collectionsReducer,
+    posts: postsReducer,
+    fees: feesReducer,
     settings: settingsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        // Ignore these action types
         ignoredActions: ['auth/setQrData'],
-        // Ignore these paths in state
         ignoredPaths: ['auth.qrData'],
       },
     }),

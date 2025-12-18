@@ -9,10 +9,11 @@ import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
+import Drops from "./pages/Drops";
+import Collections from "./pages/Collections";
+import Posts from "./pages/Posts";
+import Fees from "./pages/Fees";
 import Settings from "./pages/Settings";
-import Leaderboards from "./pages/Leaderboards";
-import Rewards from "./pages/Rewards";
-import Transactions from "./pages/Transactions";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -76,9 +77,10 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="users" element={<Users />} />
-          <Route path="transactions" element={<Transactions />} />
-          <Route path="leaderboards" element={<Leaderboards />} />
-          <Route path="rewards" element={<Rewards />} />
+          <Route path="drops" element={<Drops />} />
+          <Route path="collections" element={<Collections />} />
+          <Route path="posts" element={<Posts />} />
+          <Route path="fees" element={<Fees />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 

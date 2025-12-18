@@ -1,181 +1,134 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import { settingsAPI } from '../../services/api'
 
-const initialState = {
-  platform: {
-    platformFee: 2.5,
-    royaltyFee: 5.0,
-    minListingPrice: 1,
-    maxListingPrice: 1000000,
-    enableOffers: true,
-    enableRoyalties: true,
-    maintenanceMode: false,
-  },
-  wallets: {
-    adminWallet: '',
-    treasuryWallet: '',
-    feeCollectorWallet: '',
-    rewardPoolWallet: '',
-  },
-  notifications: {
-    emailNotifications: true,
-    largeTransactionAlert: true,
-    largeTransactionThreshold: 10000,
-    newUserAlert: false,
-    systemAlerts: true,
-  },
-  adminList: [],
-  loading: false,
-  saving: false,
-  error: null,
-  saveSuccess: false,
-}
-
-// Fetch platform settings
-export const fetchPlatformSettings = createAsyncThunk(
-  'settings/fetchPlatformSettings',
+// Async thunks
+export const initializeSettings = createAsyncThunk(
+  'settings/initialize',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await settingsAPI.getPlatformSettings()
-      return response.data
+      const response = await settingsAPI.initialize()
+      return response.data.data
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to initialize settings')
+    }
+  }
+)
+
+export const fetchAllSettings = createAsyncThunk(
+  'settings/fetchAll',
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const response = await settingsAPI.getSettings(params)
+      return response.data.data
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch settings')
     }
   }
 )
 
-// Update platform settings
-export const updatePlatformSettings = createAsyncThunk(
-  'settings/updatePlatformSettings',
-  async (data, { rejectWithValue }) => {
-    try {
-      const response = await settingsAPI.updatePlatformSettings(data)
-      return response.data
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update settings')
-    }
-  }
-)
-
-// Fetch wallet settings
-export const fetchWalletSettings = createAsyncThunk(
-  'settings/fetchWalletSettings',
+export const fetchPublicSettings = createAsyncThunk(
+  'settings/fetchPublic',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await settingsAPI.getWalletSettings()
-      return response.data
+      const response = await settingsAPI.getPublicSettings()
+      return response.data.data
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch wallet settings')
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch public settings')
     }
   }
 )
 
-// Update wallet settings
-export const updateWalletSettings = createAsyncThunk(
-  'settings/updateWalletSettings',
+export const fetchSetting = createAsyncThunk(
+  'settings/fetchOne',
+  async (key, { rejectWithValue }) => {
+    try {
+      const response = await settingsAPI.getSetting(key)
+      return response.data.data
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch setting')
+    }
+  }
+)
+
+export const updateSetting = createAsyncThunk(
+  'settings/update',
+  async ({ key, data }, { rejectWithValue }) => {
+    try {
+      const response = await settingsAPI.updateSetting(key, data)
+      return { key, ...response.data.data }
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to update setting')
+    }
+  }
+)
+
+export const resetSetting = createAsyncThunk(
+  'settings/reset',
+  async ({ key, reason }, { rejectWithValue }) => {
+    try {
+      const response = await settingsAPI.resetSetting(key, reason)
+      return { key, ...response.data.data }
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to reset setting')
+    }
+  }
+)
+
+export const createSetting = createAsyncThunk(
+  'settings/create',
   async (data, { rejectWithValue }) => {
     try {
-      const response = await settingsAPI.updateWalletSettings(data)
-      return response.data
+      const response = await settingsAPI.createSetting(data)
+      return response.data.data
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update wallet settings')
+      return rejectWithValue(error.response?.data?.message || 'Failed to create setting')
     }
   }
 )
 
-// Fetch notification settings
-export const fetchNotificationSettings = createAsyncThunk(
-  'settings/fetchNotificationSettings',
-  async (_, { rejectWithValue }) => {
+export const deleteSetting = createAsyncThunk(
+  'settings/delete',
+  async ({ key, reason }, { rejectWithValue }) => {
     try {
-      const response = await settingsAPI.getNotificationSettings()
-      return response.data
+      await settingsAPI.deleteSetting(key, reason)
+      return { key }
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch notification settings')
+      return rejectWithValue(error.response?.data?.message || 'Failed to delete setting')
     }
   }
 )
 
-// Update notification settings
-export const updateNotificationSettings = createAsyncThunk(
-  'settings/updateNotificationSettings',
-  async (data, { rejectWithValue }) => {
+export const bulkUpdateSettings = createAsyncThunk(
+  'settings/bulkUpdate',
+  async ({ settings, reason }, { rejectWithValue }) => {
     try {
-      const response = await settingsAPI.updateNotificationSettings(data)
-      return response.data
+      const response = await settingsAPI.bulkUpdate(settings, reason)
+      return response.data.data
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update notification settings')
+      return rejectWithValue(error.response?.data?.message || 'Failed to bulk update settings')
     }
   }
 )
 
-// Fetch all settings
-export const fetchAllSettings = createAsyncThunk(
-  'settings/fetchAll',
-  async (_, { dispatch }) => {
-    await Promise.all([
-      dispatch(fetchPlatformSettings()),
-      dispatch(fetchWalletSettings()),
-      dispatch(fetchNotificationSettings()),
-    ])
-  }
-)
-
-// Save all settings
-export const saveAllSettings = createAsyncThunk(
-  'settings/saveAll',
-  async (data, { dispatch, rejectWithValue }) => {
-    try {
-      await Promise.all([
-        dispatch(updatePlatformSettings(data.platform)),
-        dispatch(updateWalletSettings(data.wallets)),
-        dispatch(updateNotificationSettings(data.notifications)),
-      ])
-      return true
-    } catch (error) {
-      return rejectWithValue('Failed to save settings')
-    }
-  }
-)
-
-// Fetch admin list
-export const fetchAdminList = createAsyncThunk(
-  'settings/fetchAdminList',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await settingsAPI.getAdminList()
-      return response.data
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch admin list')
-    }
-  }
-)
-
-// Add admin wallet
-export const addAdminWallet = createAsyncThunk(
-  'settings/addAdminWallet',
-  async (walletAddress, { rejectWithValue }) => {
-    try {
-      const response = await settingsAPI.addAdminWallet(walletAddress)
-      return response.data
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to add admin wallet')
-    }
-  }
-)
-
-// Remove admin wallet
-export const removeAdminWallet = createAsyncThunk(
-  'settings/removeAdminWallet',
-  async (walletAddress, { rejectWithValue }) => {
-    try {
-      await settingsAPI.removeAdminWallet(walletAddress)
-      return walletAddress
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to remove admin wallet')
-    }
-  }
-)
+const initialState = {
+  // Settings grouped by category
+  settings: {
+    fees: [],
+    marketplace: [],
+    drops: [],
+    social: [],
+    notifications: [],
+    general: []
+  },
+  // Flat public settings for easy access
+  publicSettings: {},
+  // Total count
+  total: 0,
+  loading: false,
+  saving: false,
+  error: null,
+  saveSuccess: false,
+}
 
 const settingsSlice = createSlice({
   name: 'settings',
@@ -187,160 +140,175 @@ const settingsSlice = createSlice({
     clearSaveSuccess: (state) => {
       state.saveSuccess = false
     },
-    updatePlatformLocal: (state, action) => {
-      state.platform = { ...state.platform, ...action.payload }
-      state.saveSuccess = false
-    },
-    updateWalletsLocal: (state, action) => {
-      state.wallets = { ...state.wallets, ...action.payload }
-      state.saveSuccess = false
-    },
-    updateNotificationsLocal: (state, action) => {
-      state.notifications = { ...state.notifications, ...action.payload }
-      state.saveSuccess = false
-    },
-    // For demo/mock data
-    setMockSettings: (state) => {
-      state.platform = {
-        platformFee: 2.5,
-        royaltyFee: 5.0,
-        minListingPrice: 1,
-        maxListingPrice: 1000000,
-        enableOffers: true,
-        enableRoyalties: true,
-        maintenanceMode: false,
+    updateSettingLocal: (state, action) => {
+      const { category, key, value } = action.payload
+      if (state.settings[category]) {
+        const index = state.settings[category].findIndex((s) => s.key === key)
+        if (index !== -1) {
+          state.settings[category][index].value = value
+          state.settings[category][index].parsedValue = value
+        }
       }
-      state.wallets = {
-        adminWallet: 'rDeGeArNsAdMiN1234567890XRP',
-        treasuryWallet: 'rTrEaSuRyWaLlEt9876543210ABC',
-        feeCollectorWallet: 'rFeEcOlLeCt0r1122334455DEF',
-        rewardPoolWallet: 'rReWaRdPoOl6677889900GHI',
-      }
-      state.notifications = {
-        emailNotifications: true,
-        largeTransactionAlert: true,
-        largeTransactionThreshold: 10000,
-        newUserAlert: false,
-        systemAlerts: true,
-      }
-      state.adminList = [
-        { address: 'rDeGeArNsAdMiN1234567890XRP', role: 'Primary Admin', addedAt: '2024-01-01' },
-      ]
+      state.saveSuccess = false
     },
   },
   extraReducers: (builder) => {
     builder
-      // Fetch Platform Settings
-      .addCase(fetchPlatformSettings.pending, (state) => {
+      // Initialize Settings
+      .addCase(initializeSettings.pending, (state) => {
         state.loading = true
         state.error = null
       })
-      .addCase(fetchPlatformSettings.fulfilled, (state, action) => {
+      .addCase(initializeSettings.fulfilled, (state) => {
         state.loading = false
-        state.platform = action.payload
+        state.saveSuccess = true
       })
-      .addCase(fetchPlatformSettings.rejected, (state, action) => {
+      .addCase(initializeSettings.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload
       })
 
-      // Update Platform Settings
-      .addCase(updatePlatformSettings.pending, (state) => {
+      // Fetch All Settings
+      .addCase(fetchAllSettings.pending, (state) => {
+        state.loading = true
+        state.error = null
+      })
+      .addCase(fetchAllSettings.fulfilled, (state, action) => {
+        state.loading = false
+        if (action.payload?.settings) {
+          state.settings = action.payload.settings
+        }
+        if (action.payload?.total !== undefined) {
+          state.total = action.payload.total
+        }
+      })
+      .addCase(fetchAllSettings.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload
+      })
+
+      // Fetch Public Settings
+      .addCase(fetchPublicSettings.fulfilled, (state, action) => {
+        if (action.payload) {
+          state.publicSettings = action.payload
+        }
+      })
+
+      // Update Setting
+      .addCase(updateSetting.pending, (state) => {
         state.saving = true
         state.error = null
       })
-      .addCase(updatePlatformSettings.fulfilled, (state, action) => {
+      .addCase(updateSetting.fulfilled, (state, action) => {
         state.saving = false
         state.saveSuccess = true
-        if (action.payload) {
-          state.platform = action.payload
+        if (action.payload?.setting) {
+          const { category } = action.payload.setting
+          if (state.settings[category]) {
+            const index = state.settings[category].findIndex(
+              (s) => s.key === action.payload.setting.key
+            )
+            if (index !== -1) {
+              state.settings[category][index] = action.payload.setting
+            }
+          }
         }
       })
-      .addCase(updatePlatformSettings.rejected, (state, action) => {
+      .addCase(updateSetting.rejected, (state, action) => {
         state.saving = false
         state.error = action.payload
       })
 
-      // Fetch Wallet Settings
-      .addCase(fetchWalletSettings.fulfilled, (state, action) => {
-        state.wallets = action.payload
-      })
-
-      // Update Wallet Settings
-      .addCase(updateWalletSettings.pending, (state) => {
+      // Reset Setting
+      .addCase(resetSetting.pending, (state) => {
         state.saving = true
       })
-      .addCase(updateWalletSettings.fulfilled, (state, action) => {
+      .addCase(resetSetting.fulfilled, (state, action) => {
         state.saving = false
         state.saveSuccess = true
-        if (action.payload) {
-          state.wallets = action.payload
+        if (action.payload?.setting) {
+          const { category } = action.payload.setting
+          if (state.settings[category]) {
+            const index = state.settings[category].findIndex(
+              (s) => s.key === action.payload.setting.key
+            )
+            if (index !== -1) {
+              state.settings[category][index] = action.payload.setting
+            }
+          }
         }
       })
-      .addCase(updateWalletSettings.rejected, (state, action) => {
+      .addCase(resetSetting.rejected, (state, action) => {
         state.saving = false
         state.error = action.payload
       })
 
-      // Fetch Notification Settings
-      .addCase(fetchNotificationSettings.fulfilled, (state, action) => {
-        state.notifications = action.payload
-      })
-
-      // Update Notification Settings
-      .addCase(updateNotificationSettings.pending, (state) => {
+      // Create Setting
+      .addCase(createSetting.pending, (state) => {
         state.saving = true
       })
-      .addCase(updateNotificationSettings.fulfilled, (state, action) => {
+      .addCase(createSetting.fulfilled, (state, action) => {
         state.saving = false
         state.saveSuccess = true
-        if (action.payload) {
-          state.notifications = action.payload
+        if (action.payload?.setting) {
+          const { category } = action.payload.setting
+          if (state.settings[category]) {
+            state.settings[category].push(action.payload.setting)
+          }
         }
       })
-      .addCase(updateNotificationSettings.rejected, (state, action) => {
+      .addCase(createSetting.rejected, (state, action) => {
         state.saving = false
         state.error = action.payload
       })
 
-      // Save All Settings
-      .addCase(saveAllSettings.pending, (state) => {
+      // Delete Setting
+      .addCase(deleteSetting.pending, (state) => {
+        state.saving = true
+      })
+      .addCase(deleteSetting.fulfilled, (state, action) => {
+        state.saving = false
+        state.saveSuccess = true
+        // Remove from all categories
+        Object.keys(state.settings).forEach((category) => {
+          state.settings[category] = state.settings[category].filter(
+            (s) => s.key !== action.payload.key
+          )
+        })
+      })
+      .addCase(deleteSetting.rejected, (state, action) => {
+        state.saving = false
+        state.error = action.payload
+      })
+
+      // Bulk Update
+      .addCase(bulkUpdateSettings.pending, (state) => {
         state.saving = true
         state.error = null
       })
-      .addCase(saveAllSettings.fulfilled, (state) => {
+      .addCase(bulkUpdateSettings.fulfilled, (state, action) => {
         state.saving = false
         state.saveSuccess = true
+        if (action.payload?.updated) {
+          action.payload.updated.forEach((updatedSetting) => {
+            const { category } = updatedSetting
+            if (state.settings[category]) {
+              const index = state.settings[category].findIndex(
+                (s) => s.key === updatedSetting.key
+              )
+              if (index !== -1) {
+                state.settings[category][index] = updatedSetting
+              }
+            }
+          })
+        }
       })
-      .addCase(saveAllSettings.rejected, (state, action) => {
+      .addCase(bulkUpdateSettings.rejected, (state, action) => {
         state.saving = false
         state.error = action.payload
-      })
-
-      // Fetch Admin List
-      .addCase(fetchAdminList.fulfilled, (state, action) => {
-        state.adminList = action.payload
-      })
-
-      // Add Admin Wallet
-      .addCase(addAdminWallet.fulfilled, (state, action) => {
-        state.adminList.push(action.payload)
-      })
-
-      // Remove Admin Wallet
-      .addCase(removeAdminWallet.fulfilled, (state, action) => {
-        state.adminList = state.adminList.filter((admin) => admin.address !== action.payload)
       })
   },
 })
 
-export const {
-  clearError,
-  clearSaveSuccess,
-  updatePlatformLocal,
-  updateWalletsLocal,
-  updateNotificationsLocal,
-  setMockSettings,
-} = settingsSlice.actions
-
+export const { clearError, clearSaveSuccess, updateSettingLocal } = settingsSlice.actions
 export default settingsSlice.reducer
