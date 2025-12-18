@@ -10,7 +10,6 @@ import {
   ExternalLink,
   RefreshCw,
   Key,
-  Globe,
   Bell,
   Settings2,
   Database,
@@ -24,9 +23,6 @@ const Settings = () => {
     royaltyFee: 5.0,
     minListingPrice: 1,
     maxListingPrice: 1000000,
-    auctionMinDuration: 24,
-    auctionMaxDuration: 168,
-    enableAuctions: true,
     enableOffers: true,
     enableRoyalties: true,
     maintenanceMode: false
@@ -225,47 +221,6 @@ const Settings = () => {
             </div>
           </div>
 
-          {/* Auction Settings */}
-          <div className="p-6 rounded-xl bg-dark-200 border border-gray-800">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                <Globe className="w-5 h-5 text-purple-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Auction Settings</h3>
-                <p className="text-gray-400 text-sm">Configure auction parameters</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">
-                  Minimum Auction Duration (hours)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={platformSettings.auctionMinDuration}
-                  onChange={(e) => handlePlatformChange('auctionMinDuration', parseInt(e.target.value))}
-                  className="input-field"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">
-                  Maximum Auction Duration (hours)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={platformSettings.auctionMaxDuration}
-                  onChange={(e) => handlePlatformChange('auctionMaxDuration', parseInt(e.target.value))}
-                  className="input-field"
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Feature Toggles */}
           <div className="p-6 rounded-xl bg-dark-200 border border-gray-800">
             <div className="flex items-center gap-3 mb-6">
@@ -280,7 +235,6 @@ const Settings = () => {
 
             <div className="space-y-4">
               {[
-                { key: 'enableAuctions', label: 'Enable Auctions', desc: 'Allow users to create auctions' },
                 { key: 'enableOffers', label: 'Enable Offers', desc: 'Allow users to make offers on NFTs' },
                 { key: 'enableRoyalties', label: 'Enable Royalties', desc: 'Enable creator royalties on secondary sales' },
                 { key: 'maintenanceMode', label: 'Maintenance Mode', desc: 'Put platform in maintenance mode', danger: true }

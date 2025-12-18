@@ -63,7 +63,7 @@ const recentTransactions = [
   { id: 2, type: 'Listing', nft: 'Abstract Wave #89', price: '1,200 XRP', time: '5 mins ago', status: 'pending' },
   { id: 3, type: 'Transfer', nft: 'Digital Galaxy #45', price: '-', time: '12 mins ago', status: 'completed' },
   { id: 4, type: 'Sale', nft: 'Neon City #201', price: '5,800 XRP', time: '18 mins ago', status: 'completed' },
-  { id: 5, type: 'Auction', nft: 'Ethereal Being #67', price: '3,200 XRP', time: '25 mins ago', status: 'active' },
+  { id: 5, type: 'Offer', nft: 'Ethereal Being #67', price: '3,200 XRP', time: '25 mins ago', status: 'active' },
 ]
 
 const COLORS = ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#6366f1']
@@ -340,7 +340,7 @@ const Dashboard = () => {
           </div>
           <div className="text-center p-4 rounded-lg bg-dark-300">
             <p className="text-3xl font-bold text-orange-400 mb-1">847</p>
-            <p className="text-gray-400 text-sm">Active Auctions</p>
+            <p className="text-gray-400 text-sm">Active Offers</p>
           </div>
         </div>
       </div>

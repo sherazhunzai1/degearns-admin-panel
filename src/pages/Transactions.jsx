@@ -58,19 +58,6 @@ const mockTransactions = [
   },
   {
     id: 4,
-    type: 'auction_bid',
-    nft: 'Ethereal Being #67',
-    collection: 'Ethereal Beings',
-    from: 'rBidder777888999',
-    to: '-',
-    amount: '3,200 XRP',
-    fee: '-',
-    date: '2024-06-15 13:58:30',
-    status: 'pending',
-    txHash: 'BCD890EFG123HIJ456'
-  },
-  {
-    id: 5,
     type: 'sale',
     nft: 'Neon City #201',
     collection: 'Neon Cities',
@@ -83,20 +70,7 @@ const mockTransactions = [
     txHash: 'KLM789NOP012QRS345'
   },
   {
-    id: 6,
-    type: 'auction_end',
-    nft: 'Rare Gem #12',
-    collection: 'Rare Gems',
-    from: 'rSeller666777888',
-    to: 'rWinner999000111',
-    amount: '12,500 XRP',
-    fee: '312.5 XRP',
-    date: '2024-06-15 13:30:00',
-    status: 'completed',
-    txHash: 'TUV678WXY901ZAB234'
-  },
-  {
-    id: 7,
+    id: 5,
     type: 'offer_accepted',
     nft: 'Pixel Art #567',
     collection: 'Pixel Universe',
@@ -109,7 +83,7 @@ const mockTransactions = [
     txHash: 'CDE567FGH890IJK123'
   },
   {
-    id: 8,
+    id: 6,
     type: 'mint',
     nft: 'New Creation #1',
     collection: 'Fresh Mints',
@@ -125,11 +99,11 @@ const mockTransactions = [
 
 // Generate more mock transactions
 const generateMoreTransactions = () => {
-  const types = ['sale', 'listing', 'transfer', 'auction_bid', 'auction_end', 'offer_accepted', 'mint']
+  const types = ['sale', 'listing', 'transfer', 'offer_accepted', 'mint']
   const statuses = ['completed', 'completed', 'completed', 'pending', 'active', 'failed']
   const transactions = [...mockTransactions]
 
-  for (let i = 9; i <= 100; i++) {
+  for (let i = 7; i <= 100; i++) {
     const type = types[Math.floor(Math.random() * types.length)]
     transactions.push({
       id: i,
@@ -137,7 +111,7 @@ const generateMoreTransactions = () => {
       nft: `NFT #${Math.floor(Math.random() * 1000)}`,
       collection: `Collection ${Math.floor(Math.random() * 50)}`,
       from: `r${Math.random().toString(36).substring(2, 12)}`,
-      to: type === 'listing' || type === 'auction_bid' || type === 'mint' ? '-' : `r${Math.random().toString(36).substring(2, 12)}`,
+      to: type === 'listing' || type === 'mint' ? '-' : `r${Math.random().toString(36).substring(2, 12)}`,
       amount: type === 'transfer' || type === 'mint' ? '-' : `${Math.floor(Math.random() * 10000)} XRP`,
       fee: `${Math.floor(Math.random() * 100)} XRP`,
       date: `2024-06-${String(Math.floor(Math.random() * 15) + 1).padStart(2, '0')} ${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
@@ -185,15 +159,12 @@ const Transactions = () => {
   const getTypeIcon = (type) => {
     switch (type) {
       case 'sale':
-      case 'auction_end':
       case 'offer_accepted':
         return <ArrowLeftRight className="w-4 h-4 text-green-400" />
       case 'listing':
         return <ArrowUpRight className="w-4 h-4 text-blue-400" />
       case 'transfer':
         return <ArrowDownRight className="w-4 h-4 text-purple-400" />
-      case 'auction_bid':
-        return <ArrowUpRight className="w-4 h-4 text-orange-400" />
       case 'mint':
         return <Image className="w-4 h-4 text-pink-400" />
       default:
@@ -206,8 +177,6 @@ const Transactions = () => {
       sale: 'bg-green-500/20 text-green-400',
       listing: 'bg-blue-500/20 text-blue-400',
       transfer: 'bg-purple-500/20 text-purple-400',
-      auction_bid: 'bg-orange-500/20 text-orange-400',
-      auction_end: 'bg-green-500/20 text-green-400',
       offer_accepted: 'bg-cyan-500/20 text-cyan-400',
       mint: 'bg-pink-500/20 text-pink-400'
     }
@@ -215,8 +184,6 @@ const Transactions = () => {
       sale: 'Sale',
       listing: 'Listing',
       transfer: 'Transfer',
-      auction_bid: 'Auction Bid',
-      auction_end: 'Auction End',
       offer_accepted: 'Offer Accepted',
       mint: 'Mint'
     }
@@ -250,7 +217,7 @@ const Transactions = () => {
     totalFees: filteredTransactions
       .filter(tx => tx.fee !== '-')
       .reduce((sum, tx) => sum + parseInt(tx.fee.replace(/[^0-9]/g, '') || 0), 0),
-    totalSales: filteredTransactions.filter(tx => tx.type === 'sale' || tx.type === 'auction_end' || tx.type === 'offer_accepted').length,
+    totalSales: filteredTransactions.filter(tx => tx.type === 'sale' || tx.type === 'offer_accepted').length,
     totalTransfers: filteredTransactions.filter(tx => tx.type === 'transfer').length
   }
 
@@ -324,8 +291,6 @@ const Transactions = () => {
           <option value="sale">Sale</option>
           <option value="listing">Listing</option>
           <option value="transfer">Transfer</option>
-          <option value="auction_bid">Auction Bid</option>
-          <option value="auction_end">Auction End</option>
           <option value="offer_accepted">Offer Accepted</option>
           <option value="mint">Mint</option>
         </select>
