@@ -1,26 +1,87 @@
-import { useState } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { Wallet, Shield, ArrowRight, AlertCircle, Smartphone, QrCode } from 'lucide-react'
+import { useEffect, useCallback } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import { Wallet, Shield, ArrowRight, AlertCircle, Smartphone, QrCode, Loader2, X, RefreshCw } from 'lucide-react'
+import {
+  initiateXamanLogin,
+  verifyXamanSignature,
+  clearError,
+  cancelXamanLogin,
+  setWebsocketConnected,
+  setLoginStep,
+  demoLogin,
+} from '../store/slices/authSlice'
+import xamanService from '../services/xaman'
 
 const Login = () => {
-  const { initiateXamanLogin, handleXamanCallback, demoLogin, loading, error, qrCode, wsUrl, clearError } = useAuth()
-  const [showQR, setShowQR] = useState(false)
-  const [payloadUuid, setPayloadUuid] = useState(null)
+  const dispatch = useDispatch()
+  const {
+    loading,
+    xamanLoading,
+    error,
+    qrData,
+    payloadId,
+    loginStep,
+    websocketConnected,
+  } = useSelector((state) => state.auth)
 
-  const handleConnectWallet = async () => {
-    clearError()
-    const result = await initiateXamanLogin()
-    if (result.success) {
-      setPayloadUuid(result.uuid)
-      setShowQR(true)
+  // Handle WebSocket connection and listen for sign events
+  useEffect(() => {
+    if (qrData?.websocketUrl && payloadId && loginStep === 'qr_displayed') {
+      const connectWs = async () => {
+        try {
+          await xamanService.connectWebSocket(qrData.websocketUrl, {
+            onOpened: () => {
+              dispatch(setWebsocketConnected(true))
+            },
+            onSigned: async () => {
+              dispatch(setLoginStep('waiting_signature'))
+              // Verify the signature with backend
+              dispatch(verifyXamanSignature(payloadId))
+            },
+            onRejected: () => {
+              dispatch(setLoginStep('error'))
+              dispatch(clearError())
+            },
+            onExpired: () => {
+              dispatch(setLoginStep('error'))
+            },
+          })
+        } catch (err) {
+          console.error('WebSocket connection failed:', err)
+        }
+      }
+      connectWs()
     }
-  }
 
-  const handleSignComplete = async () => {
-    if (payloadUuid) {
-      await handleXamanCallback(payloadUuid)
+    // Cleanup on unmount
+    return () => {
+      xamanService.closeWebSocket()
     }
-  }
+  }, [qrData?.websocketUrl, payloadId, loginStep, dispatch])
+
+  const handleConnectWallet = useCallback(async () => {
+    dispatch(clearError())
+    dispatch(initiateXamanLogin())
+  }, [dispatch])
+
+  const handleCancel = useCallback(() => {
+    dispatch(cancelXamanLogin())
+  }, [dispatch])
+
+  const handleDemoLogin = useCallback(() => {
+    dispatch(demoLogin())
+  }, [dispatch])
+
+  const handleRetry = useCallback(() => {
+    dispatch(cancelXamanLogin())
+    setTimeout(() => {
+      handleConnectWallet()
+    }, 100)
+  }, [dispatch, handleConnectWallet])
+
+  const isLoading = loading || xamanLoading
+  const showQR = loginStep === 'qr_displayed' || loginStep === 'waiting_signature'
+  const isWaitingSignature = loginStep === 'waiting_signature' || loginStep === 'verifying'
 
   return (
     <div className="min-h-screen bg-dark-500 flex items-center justify-center p-4">
@@ -54,7 +115,16 @@ const Login = () => {
               {error && (
                 <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-red-400 text-sm">{error}</p>
+                  <div className="flex-1">
+                    <p className="text-red-400 text-sm">{error}</p>
+                    <button
+                      onClick={handleRetry}
+                      className="mt-2 text-sm text-primary-400 hover:text-primary-300 flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Try again
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -83,13 +153,13 @@ const Login = () => {
               {/* Connect Button */}
               <button
                 onClick={handleConnectWallet}
-                disabled={loading}
+                disabled={isLoading}
                 className="w-full py-4 px-6 gradient-bg rounded-xl text-white font-semibold
                          flex items-center justify-center gap-3 hover:opacity-90 transition-opacity
                          disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary-500/30"
               >
-                {loading ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   <>
                     <Wallet className="w-5 h-5" />
@@ -102,7 +172,7 @@ const Login = () => {
               {/* Demo Login */}
               <div className="mt-4 text-center">
                 <button
-                  onClick={demoLogin}
+                  onClick={handleDemoLogin}
                   className="text-gray-400 text-sm hover:text-primary-400 transition-colors"
                 >
                   Demo Login (for testing)
@@ -113,59 +183,77 @@ const Login = () => {
             <>
               {/* QR Code Display */}
               <div className="text-center">
-                <h2 className="text-xl font-semibold text-white mb-2">Scan QR Code</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <div></div>
+                  <h2 className="text-xl font-semibold text-white">
+                    {isWaitingSignature ? 'Verifying...' : 'Scan QR Code'}
+                  </h2>
+                  <button
+                    onClick={handleCancel}
+                    className="p-2 rounded-lg hover:bg-dark-300 transition-colors text-gray-400"
+                    disabled={isWaitingSignature}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
                 <p className="text-gray-400 text-sm mb-6">
-                  Open your Xaman wallet app and scan this QR code
+                  {isWaitingSignature
+                    ? 'Please wait while we verify your signature...'
+                    : 'Open your Xaman wallet app and scan this QR code'}
                 </p>
 
-                {/* QR Code placeholder */}
-                <div className="w-48 h-48 mx-auto bg-white rounded-xl p-4 mb-6">
-                  <div className="w-full h-full bg-dark-300 rounded-lg flex items-center justify-center">
-                    <QrCode className="w-24 h-24 text-gray-600" />
-                  </div>
+                {/* QR Code */}
+                <div className="w-56 h-56 mx-auto bg-white rounded-xl p-3 mb-6 relative">
+                  {qrData?.qrCodeUrl ? (
+                    <img
+                      src={qrData.qrCodeUrl}
+                      alt="Xaman Login QR Code"
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-dark-300 rounded-lg flex items-center justify-center">
+                      <QrCode className="w-24 h-24 text-gray-600" />
+                    </div>
+                  )}
+                  {isWaitingSignature && (
+                    <div className="absolute inset-0 bg-white/80 rounded-xl flex items-center justify-center">
+                      <Loader2 className="w-12 h-12 text-primary-500 animate-spin" />
+                    </div>
+                  )}
                 </div>
 
+                {/* WebSocket status */}
+                <div className="flex items-center justify-center gap-2 text-sm mb-4">
+                  <div className={`w-2 h-2 rounded-full ${websocketConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`}></div>
+                  <span className={websocketConnected ? 'text-green-400' : 'text-yellow-400'}>
+                    {websocketConnected ? 'Waiting for signature...' : 'Connecting...'}
+                  </span>
+                </div>
+
+                {/* Mobile deep link */}
                 <div className="flex items-center justify-center gap-2 text-gray-400 text-sm mb-6">
                   <Smartphone className="w-4 h-4" />
-                  <span>Or open Xaman app directly</span>
+                  <span>Or open in Xaman app</span>
                 </div>
 
-                {wsUrl && (
+                {qrData?.deepLink && (
                   <a
-                    href={wsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block mb-6 text-primary-400 hover:text-primary-300 text-sm"
+                    href={qrData.deepLink}
+                    className="inline-flex items-center gap-2 mb-6 px-4 py-2 bg-primary-500/20 rounded-lg text-primary-400 hover:bg-primary-500/30 text-sm transition-colors"
                   >
-                    Open in Xaman App →
+                    <Wallet className="w-4 h-4" />
+                    Open in Xaman App
                   </a>
                 )}
 
-                <div className="space-y-3">
+                {/* Cancel button */}
+                <div className="mt-4">
                   <button
-                    onClick={handleSignComplete}
-                    disabled={loading}
-                    className="w-full py-3 px-6 gradient-bg rounded-xl text-white font-semibold
-                             flex items-center justify-center gap-2 hover:opacity-90 transition-opacity
-                             disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? (
-                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
-                    ) : (
-                      <>
-                        I've Signed the Request
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowQR(false)
-                      clearError()
-                    }}
+                    onClick={handleCancel}
+                    disabled={isWaitingSignature}
                     className="w-full py-3 px-6 bg-dark-300 rounded-xl text-gray-300 font-medium
-                             hover:bg-dark-200 transition-colors"
+                             hover:bg-dark-200 transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -174,6 +262,13 @@ const Login = () => {
                 {error && (
                   <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
                     <p className="text-red-400 text-sm">{error}</p>
+                    <button
+                      onClick={handleRetry}
+                      className="mt-2 text-sm text-primary-400 hover:text-primary-300 flex items-center gap-1 mx-auto"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Try again
+                    </button>
                   </div>
                 )}
               </div>
