@@ -1,5 +1,4 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
-import api from '../../services/api'
 import xamanService from '../../services/xaman'
 
 // Check for existing auth on load
@@ -20,56 +19,39 @@ const getInitialState = () => {
     isAuthenticated: !!token && !!user,
     loading: false,
     error: null,
-    // Xaman login state
-    xamanLoading: false,
-    qrData: null,
-    payloadId: null,
-    websocketConnected: false,
-    loginStep: 'idle', // idle, qr_displayed, waiting_signature, verifying, success, error
+    // Login state
+    loginLoading: false,
+    loginStep: 'idle', // idle, connecting, success, error
   }
 }
 
-// Async thunk to initiate Xaman login
-export const initiateXamanLogin = createAsyncThunk(
-  'auth/initiateXamanLogin',
+// Async thunk to login with Xaman wallet
+export const loginWithXaman = createAsyncThunk(
+  'auth/loginWithXaman',
   async (_, { rejectWithValue }) => {
     try {
       const result = await xamanService.initiateLogin()
+
       if (!result.success) {
-        return rejectWithValue(result.error)
+        return rejectWithValue(result.error || 'Login failed')
       }
+
       return result
     } catch (error) {
-      return rejectWithValue(error.message || 'Failed to initiate login')
+      return rejectWithValue(error.message || 'Failed to connect to Xaman wallet')
     }
   }
 )
 
-// Async thunk to verify Xaman signature
-export const verifyXamanSignature = createAsyncThunk(
-  'auth/verifyXamanSignature',
-  async (payloadId, { rejectWithValue }) => {
-    try {
-      const result = await xamanService.verifySignature(payloadId)
-      if (!result.success) {
-        return rejectWithValue(result.error)
-      }
-      return result
-    } catch (error) {
-      return rejectWithValue(error.message || 'Failed to verify signature')
-    }
-  }
-)
-
-// Async thunk to get user profile
-export const fetchUserProfile = createAsyncThunk(
-  'auth/fetchUserProfile',
+// Async thunk to check existing auth
+export const checkExistingAuth = createAsyncThunk(
+  'auth/checkExistingAuth',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('/auth/profile')
-      return response.data
+      const result = await xamanService.checkExistingAuth()
+      return result
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch profile')
+      return rejectWithValue(error.message || 'Failed to check authentication')
     }
   }
 )
@@ -77,17 +59,8 @@ export const fetchUserProfile = createAsyncThunk(
 // Async thunk to logout
 export const logout = createAsyncThunk(
   'auth/logout',
-  async (_, { rejectWithValue }) => {
-    try {
-      await api.post('/auth/logout')
-    } catch (error) {
-      // Continue with logout even if API call fails
-      console.error('Logout API error:', error)
-    }
-    // Clear local storage
-    localStorage.removeItem('degearns_admin_token')
-    localStorage.removeItem('degearns_admin_user')
-    xamanService.cancelLogin()
+  async () => {
+    await xamanService.logout()
     return null
   }
 )
@@ -99,22 +72,12 @@ const authSlice = createSlice({
     clearError: (state) => {
       state.error = null
     },
-    setQrData: (state, action) => {
-      state.qrData = action.payload
-    },
-    setWebsocketConnected: (state, action) => {
-      state.websocketConnected = action.payload
-    },
     setLoginStep: (state, action) => {
       state.loginStep = action.payload
     },
-    cancelXamanLogin: (state) => {
-      xamanService.cancelLogin()
-      state.qrData = null
-      state.payloadId = null
-      state.websocketConnected = false
+    resetLoginState: (state) => {
+      state.loginLoading = false
       state.loginStep = 'idle'
-      state.xamanLoading = false
       state.error = null
     },
     // Demo login for testing
@@ -136,64 +99,39 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Initiate Xaman Login
-      .addCase(initiateXamanLogin.pending, (state) => {
-        state.xamanLoading = true
+      // Login with Xaman
+      .addCase(loginWithXaman.pending, (state) => {
+        state.loginLoading = true
         state.error = null
-        state.loginStep = 'idle'
+        state.loginStep = 'connecting'
       })
-      .addCase(initiateXamanLogin.fulfilled, (state, action) => {
-        state.xamanLoading = false
-        state.qrData = {
-          qrCodeUrl: action.payload.qrCodeUrl,
-          qrCodeData: action.payload.qrCodeData,
-          deepLink: action.payload.deepLink,
-          websocketUrl: action.payload.websocketUrl,
-          expiresAt: action.payload.expiresAt,
-        }
-        state.payloadId = action.payload.payloadId
-        state.loginStep = 'qr_displayed'
-      })
-      .addCase(initiateXamanLogin.rejected, (state, action) => {
-        state.xamanLoading = false
-        state.error = action.payload || 'Failed to initiate login'
-        state.loginStep = 'error'
-      })
-
-      // Verify Xaman Signature
-      .addCase(verifyXamanSignature.pending, (state) => {
-        state.loading = true
-        state.error = null
-        state.loginStep = 'verifying'
-      })
-      .addCase(verifyXamanSignature.fulfilled, (state, action) => {
-        state.loading = false
+      .addCase(loginWithXaman.fulfilled, (state, action) => {
+        state.loginLoading = false
         state.user = action.payload.user
         state.token = action.payload.token
         state.isAuthenticated = true
-        state.qrData = null
-        state.payloadId = null
-        state.websocketConnected = false
         state.loginStep = 'success'
+        state.error = null
       })
-      .addCase(verifyXamanSignature.rejected, (state, action) => {
-        state.loading = false
-        state.error = action.payload || 'Failed to verify signature'
+      .addCase(loginWithXaman.rejected, (state, action) => {
+        state.loginLoading = false
+        state.error = action.payload || 'Login failed'
         state.loginStep = 'error'
       })
 
-      // Fetch User Profile
-      .addCase(fetchUserProfile.pending, (state) => {
+      // Check existing auth
+      .addCase(checkExistingAuth.pending, (state) => {
         state.loading = true
       })
-      .addCase(fetchUserProfile.fulfilled, (state, action) => {
+      .addCase(checkExistingAuth.fulfilled, (state, action) => {
         state.loading = false
-        state.user = action.payload
-        localStorage.setItem('degearns_admin_user', JSON.stringify(action.payload))
+        if (action.payload.authenticated) {
+          state.user = action.payload.user
+          state.isAuthenticated = true
+        }
       })
-      .addCase(fetchUserProfile.rejected, (state, action) => {
+      .addCase(checkExistingAuth.rejected, (state) => {
         state.loading = false
-        state.error = action.payload
       })
 
       // Logout
@@ -201,9 +139,6 @@ const authSlice = createSlice({
         state.user = null
         state.token = null
         state.isAuthenticated = false
-        state.qrData = null
-        state.payloadId = null
-        state.websocketConnected = false
         state.loginStep = 'idle'
         state.loading = false
         state.error = null
@@ -213,10 +148,8 @@ const authSlice = createSlice({
 
 export const {
   clearError,
-  setQrData,
-  setWebsocketConnected,
   setLoginStep,
-  cancelXamanLogin,
+  resetLoginState,
   demoLogin,
 } = authSlice.actions
 

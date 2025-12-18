@@ -1,164 +1,162 @@
-import api from './api'
+import { XummPkce } from 'xumm-oauth2-pkce'
 
 // Xaman (XUMM) Wallet Service
-// This service handles the Xaman wallet authentication flow
+// This service handles direct Xaman wallet authentication without backend
 
-const XAMAN_WS_TIMEOUT = 300000 // 5 minutes timeout for QR code
+// You need to create an app at https://apps.xumm.dev to get your API key
+// For development, you can use this demo API key (replace with your own for production)
+const XUMM_API_KEY = import.meta.env.VITE_XUMM_API_KEY || 'your-xumm-api-key'
+
+// List of authorized admin wallet addresses
+// Add your admin wallet addresses here
+const AUTHORIZED_ADMIN_WALLETS = [
+  // Add authorized admin wallet addresses here
+  // Example: 'rYourAdminWalletAddress123'
+]
 
 class XamanService {
   constructor() {
-    this.websocket = null
-    this.payloadId = null
+    this.xumm = null
+    this.initialized = false
   }
 
   /**
-   * Initialize Xaman login flow
-   * Returns QR code data and websocket URL for status updates
+   * Initialize the Xaman SDK
+   */
+  async initialize() {
+    if (this.initialized && this.xumm) {
+      return true
+    }
+
+    try {
+      this.xumm = new XummPkce(XUMM_API_KEY, {
+        implicit: true, // Use implicit flow for simpler auth
+        redirectUrl: window.location.origin + '/login',
+      })
+      this.initialized = true
+      return true
+    } catch (error) {
+      console.error('Failed to initialize Xaman SDK:', error)
+      return false
+    }
+  }
+
+  /**
+   * Initiate login with Xaman wallet
+   * Opens popup or redirects to Xaman for authentication
    */
   async initiateLogin() {
     try {
-      const response = await api.post('/auth/xaman/init')
-      const { payloadId, qrCodeUrl, qrCodeData, websocketUrl, deepLink, expiresAt } = response.data
+      await this.initialize()
 
-      this.payloadId = payloadId
-
-      return {
-        success: true,
-        payloadId,
-        qrCodeUrl,
-        qrCodeData,
-        websocketUrl,
-        deepLink,
-        expiresAt,
+      if (!this.xumm) {
+        throw new Error('Xaman SDK not initialized')
       }
-    } catch (error) {
-      console.error('Failed to initiate Xaman login:', error)
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Failed to initiate login',
-      }
-    }
-  }
 
-  /**
-   * Connect to Xaman websocket to listen for sign events
-   * @param {string} websocketUrl - Websocket URL from payload
-   * @param {function} onSigned - Callback when user signs the request
-   * @param {function} onRejected - Callback when user rejects
-   * @param {function} onExpired - Callback when payload expires
-   */
-  connectWebSocket(websocketUrl, { onSigned, onRejected, onExpired, onOpened }) {
-    return new Promise((resolve, reject) => {
-      try {
-        this.websocket = new WebSocket(websocketUrl)
+      // Authorize with Xaman - this will open a popup or redirect
+      const authResult = await this.xumm.authorize()
 
-        const timeout = setTimeout(() => {
-          this.closeWebSocket()
-          onExpired?.()
-          reject(new Error('Payload expired'))
-        }, XAMAN_WS_TIMEOUT)
+      if (authResult && authResult.me) {
+        const walletAddress = authResult.me.account
+        const userToken = authResult.me.sub
 
-        this.websocket.onopen = () => {
-          console.log('Xaman WebSocket connected')
-          onOpened?.()
-          resolve(true)
-        }
-
-        this.websocket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-            console.log('Xaman WS message:', data)
-
-            if (data.signed === true) {
-              clearTimeout(timeout)
-              this.closeWebSocket()
-              onSigned?.(data)
-            } else if (data.signed === false) {
-              clearTimeout(timeout)
-              this.closeWebSocket()
-              onRejected?.()
-            } else if (data.expired === true) {
-              clearTimeout(timeout)
-              this.closeWebSocket()
-              onExpired?.()
-            }
-          } catch (e) {
-            console.error('Failed to parse WS message:', e)
+        // Check if wallet is authorized (if admin list is configured)
+        if (AUTHORIZED_ADMIN_WALLETS.length > 0 && !AUTHORIZED_ADMIN_WALLETS.includes(walletAddress)) {
+          this.logout()
+          return {
+            success: false,
+            error: 'This wallet is not authorized to access the admin panel',
           }
         }
 
-        this.websocket.onerror = (error) => {
-          console.error('Xaman WebSocket error:', error)
-          clearTimeout(timeout)
-          reject(error)
+        // Create user object
+        const user = {
+          id: userToken,
+          address: walletAddress,
+          username: authResult.me.name || `Admin_${walletAddress.slice(0, 6)}`,
+          picture: authResult.me.picture || null,
+          role: 'admin',
+          loginTime: new Date().toISOString(),
         }
 
-        this.websocket.onclose = () => {
-          console.log('Xaman WebSocket closed')
-          clearTimeout(timeout)
-        }
-      } catch (error) {
-        reject(error)
-      }
-    })
-  }
-
-  /**
-   * Verify the signed payload and get auth token
-   * @param {string} payloadId - The payload ID
-   */
-  async verifySignature(payloadId) {
-    try {
-      const response = await api.post('/auth/xaman/verify', { payloadId })
-      const { token, user, walletAddress } = response.data
-
-      // Store auth data
-      if (token) {
+        // Store auth data in localStorage
+        const token = `xumm_${Date.now()}_${walletAddress}`
         localStorage.setItem('degearns_admin_token', token)
-      }
-      if (user) {
         localStorage.setItem('degearns_admin_user', JSON.stringify(user))
+
+        return {
+          success: true,
+          user,
+          token,
+          walletAddress,
+        }
       }
 
-      return {
-        success: true,
-        token,
-        user,
-        walletAddress,
-      }
-    } catch (error) {
-      console.error('Failed to verify Xaman signature:', error)
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to verify signature',
+        error: 'Authentication cancelled or failed',
+      }
+    } catch (error) {
+      console.error('Xaman login error:', error)
+      return {
+        success: false,
+        error: error.message || 'Failed to authenticate with Xaman wallet',
       }
     }
   }
 
   /**
-   * Close websocket connection
+   * Check if user is already authenticated
    */
-  closeWebSocket() {
-    if (this.websocket) {
-      this.websocket.close()
-      this.websocket = null
+  async checkExistingAuth() {
+    try {
+      await this.initialize()
+
+      if (!this.xumm) {
+        return { authenticated: false }
+      }
+
+      // Check if there's an existing session
+      const state = await this.xumm.state()
+
+      if (state && state.me) {
+        const user = {
+          id: state.me.sub,
+          address: state.me.account,
+          username: state.me.name || `Admin_${state.me.account.slice(0, 6)}`,
+          picture: state.me.picture || null,
+          role: 'admin',
+          loginTime: new Date().toISOString(),
+        }
+
+        return {
+          authenticated: true,
+          user,
+        }
+      }
+
+      return { authenticated: false }
+    } catch (error) {
+      console.error('Check auth error:', error)
+      return { authenticated: false }
     }
   }
 
   /**
-   * Cancel current login flow
+   * Logout from Xaman
    */
-  cancelLogin() {
-    this.closeWebSocket()
-    this.payloadId = null
-  }
-
-  /**
-   * Get Xaman app deep link for mobile
-   * @param {string} payloadId - The payload ID
-   */
-  getDeepLink(payloadId) {
-    return `xumm://xumm.app/sign/${payloadId}`
+  async logout() {
+    try {
+      if (this.xumm) {
+        await this.xumm.logout()
+      }
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      // Clear local storage regardless of SDK logout result
+      localStorage.removeItem('degearns_admin_token')
+      localStorage.removeItem('degearns_admin_user')
+    }
   }
 
   /**
@@ -168,6 +166,13 @@ class XamanService {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
       navigator.userAgent
     )
+  }
+
+  /**
+   * Get Xaman app deep link
+   */
+  getDeepLink() {
+    return 'xumm://xumm.app'
   }
 }
 
