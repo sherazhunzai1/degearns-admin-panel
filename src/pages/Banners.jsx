@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   Search,
@@ -18,8 +18,11 @@ import {
   ChevronRight,
   Clock,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Upload,
+  CloudUpload
 } from 'lucide-react'
+import { uploadToIPFS, isIPFSConfigured } from '../services/ipfs'
 import {
   fetchBanners,
   fetchBannerStatistics,
@@ -55,6 +58,14 @@ const Banners = () => {
   const [bannerToDelete, setBannerToDelete] = useState(null)
   const [localSearch, setLocalSearch] = useState('')
   const [draggedBanner, setDraggedBanner] = useState(null)
+
+  // File upload state
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+  const fileInputRef = useRef(null)
 
   const [bannerForm, setBannerForm] = useState({
     title: '',
@@ -106,6 +117,80 @@ const Banners = () => {
       startDate: '',
       endDate: ''
     })
+    setSelectedFile(null)
+    setImagePreview(null)
+    setUploadProgress(0)
+    setUploadError(null)
+  }
+
+  // Handle file selection
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError('Please select a valid image file (JPEG, PNG, GIF, or WebP)')
+      return
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('Image size must be less than 10MB')
+      return
+    }
+
+    setSelectedFile(file)
+    setUploadError(null)
+
+    // Create preview
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setImagePreview(e.target.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Handle drag and drop for file upload
+  const handleFileDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const file = e.dataTransfer?.files?.[0]
+    if (file) {
+      const fakeEvent = { target: { files: [file] } }
+      handleFileSelect(fakeEvent)
+    }
+  }
+
+  const handleFileDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  // Upload file to IPFS
+  const uploadFileToIPFS = async () => {
+    if (!selectedFile) return null
+
+    setUploading(true)
+    setUploadProgress(0)
+    setUploadError(null)
+
+    try {
+      const result = await uploadToIPFS(selectedFile, {
+        type: 'banner',
+        name: `banner-${Date.now()}-${selectedFile.name}`,
+        onProgress: (progress) => setUploadProgress(progress)
+      })
+
+      return result.url
+    } catch (error) {
+      setUploadError(error.message)
+      return null
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleSearch = (e) => {
@@ -127,6 +212,10 @@ const Banners = () => {
         startDate: banner.startDate ? new Date(banner.startDate).toISOString().slice(0, 16) : '',
         endDate: banner.endDate ? new Date(banner.endDate).toISOString().slice(0, 16) : ''
       })
+      // Set image preview if editing and banner has image
+      if (banner.image) {
+        setImagePreview(banner.image)
+      }
     } else {
       setEditingBanner(null)
       resetForm()
@@ -135,10 +224,25 @@ const Banners = () => {
   }
 
   const handleSaveBanner = async () => {
-    if (!bannerForm.title || !bannerForm.image) return
+    // Check if we need an image
+    const hasImage = bannerForm.image || selectedFile
+    if (!bannerForm.title || !hasImage) return
+
+    let imageUrl = bannerForm.image
+
+    // If a new file is selected, upload to IPFS first
+    if (selectedFile) {
+      const uploadedUrl = await uploadFileToIPFS()
+      if (!uploadedUrl) {
+        // Upload failed, error is already set
+        return
+      }
+      imageUrl = uploadedUrl
+    }
 
     const data = {
       ...bannerForm,
+      image: imageUrl,
       position: bannerForm.position ? parseInt(bannerForm.position) : undefined,
       startDate: bannerForm.startDate || null,
       endDate: bannerForm.endDate || null
@@ -602,29 +706,106 @@ const Banners = () => {
                 />
               </div>
 
-              {/* Image URL */}
+              {/* Image Upload */}
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-2">
-                  Image URL <span className="text-red-400">*</span>
+                  Banner Image <span className="text-red-400">*</span>
                 </label>
-                <input
-                  type="url"
-                  value={bannerForm.image}
-                  onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })}
-                  placeholder="https://example.com/banner.jpg"
-                  className="input-field w-full"
-                />
-                {bannerForm.image && (
-                  <div className="mt-2 rounded-lg overflow-hidden bg-dark-400 h-32">
-                    <img
-                      src={bannerForm.image}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = 'none'
-                      }}
-                    />
+
+                {/* File Drop Zone */}
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={handleFileDrop}
+                  onDragOver={handleFileDragOver}
+                  className={`relative border-2 border-dashed rounded-xl transition-all cursor-pointer ${
+                    imagePreview
+                      ? 'border-primary-500/50 bg-primary-500/5'
+                      : 'border-gray-600 hover:border-primary-500/50 hover:bg-dark-400'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+
+                  {imagePreview ? (
+                    <div className="relative">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-full h-48 object-cover rounded-xl"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                        <div className="text-center">
+                          <Upload className="w-8 h-8 text-white mx-auto mb-2" />
+                          <p className="text-white text-sm">Click to change image</p>
+                        </div>
+                      </div>
+                      {selectedFile && (
+                        <div className="absolute bottom-2 left-2 right-2 bg-black/60 rounded-lg px-3 py-1.5">
+                          <p className="text-white text-xs truncate">{selectedFile.name}</p>
+                          <p className="text-gray-400 text-xs">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center">
+                      <CloudUpload className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                      <p className="text-gray-300 font-medium mb-1">
+                        Drop your image here or click to browse
+                      </p>
+                      <p className="text-gray-500 text-sm">
+                        Supports: JPEG, PNG, GIF, WebP (Max 10MB)
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Upload Progress */}
+                {uploading && (
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-gray-400">Uploading to IPFS...</span>
+                      <span className="text-primary-400">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-dark-400 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-primary-500 to-purple-500 transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
                   </div>
+                )}
+
+                {/* Upload Error */}
+                {uploadError && (
+                  <div className="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-red-400 text-sm">{uploadError}</p>
+                  </div>
+                )}
+
+                {/* IPFS Configuration Warning */}
+                {!isIPFSConfigured() && (
+                  <div className="mt-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-yellow-400 text-sm font-medium">IPFS not configured</p>
+                      <p className="text-yellow-400/70 text-xs mt-0.5">
+                        Set VITE_PINATA_JWT in your environment variables to enable uploads.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Existing Image URL (for editing) */}
+                {editingBanner && bannerForm.image && !selectedFile && (
+                  <p className="mt-2 text-gray-500 text-xs truncate">
+                    Current: {bannerForm.image}
+                  </p>
                 )}
               </div>
 
@@ -714,16 +895,21 @@ const Banners = () => {
               <button
                 onClick={() => setShowModal(false)}
                 className="btn-secondary flex-1"
-                disabled={actionLoading}
+                disabled={actionLoading || uploading}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveBanner}
-                disabled={actionLoading || !bannerForm.title || !bannerForm.image}
+                disabled={actionLoading || uploading || !bannerForm.title || (!bannerForm.image && !selectedFile)}
                 className="btn-primary flex-1"
               >
-                {actionLoading ? (
+                {uploading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Uploading...</span>
+                  </div>
+                ) : actionLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin mx-auto" />
                 ) : (
                   editingBanner ? 'Save Changes' : 'Create Banner'
