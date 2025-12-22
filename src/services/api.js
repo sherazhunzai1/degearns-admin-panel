@@ -512,3 +512,49 @@ export const authAPI = {
   // Logout
   logout: () => api.post('/auth/logout'),
 }
+
+// ============================================
+// Banner Management APIs
+// ============================================
+export const bannersAPI = {
+  // Get all banners with pagination and filters
+  getBanners: (params = {}) => {
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      isActive,
+      sortBy = 'position',
+      sortOrder = 'ASC'
+    } = params
+    return api.get('/admin/banners', {
+      params: { page, limit, search, isActive, sortBy, sortOrder }
+    })
+  },
+
+  // Get banner statistics
+  getStatistics: () => api.get('/admin/banners/statistics'),
+
+  // Get banner by ID
+  getBanner: (bannerId) => api.get(`/admin/banners/${bannerId}`),
+
+  // Create banner
+  createBanner: (data) => {
+    const { title, subtitle, image, link, linkText, position, isActive, startDate, endDate } = data
+    return api.post('/admin/banners', {
+      title, subtitle, image, link, linkText, position, isActive, startDate, endDate
+    })
+  },
+
+  // Update banner
+  updateBanner: (bannerId, data) => api.put(`/admin/banners/${bannerId}`, data),
+
+  // Toggle banner status
+  toggleStatus: (bannerId) => api.put(`/admin/banners/${bannerId}/toggle`),
+
+  // Reorder banners
+  reorderBanners: (bannerOrders) => api.put('/admin/banners/reorder', { bannerOrders }),
+
+  // Delete banner
+  deleteBanner: (bannerId) => api.delete(`/admin/banners/${bannerId}`),
+}

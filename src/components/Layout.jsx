@@ -14,7 +14,8 @@ import {
   Layers,
   FolderOpen,
   MessageSquare,
-  DollarSign
+  DollarSign,
+  Image
 } from 'lucide-react'
 
 const Layout = () => {
@@ -30,6 +31,7 @@ const Layout = () => {
     { name: 'Drops', href: '/drops', icon: Layers },
     { name: 'Collections', href: '/collections', icon: FolderOpen },
     { name: 'Posts', href: '/posts', icon: MessageSquare },
+    { name: 'Banners', href: '/banners', icon: Image },
     { name: 'Fees', href: '/fees', icon: DollarSign },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
