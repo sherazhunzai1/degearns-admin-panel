@@ -477,6 +477,89 @@ export const rewardsAPI = {
 }
 
 // ============================================
+// Rewards Distribution APIs
+// ============================================
+export const rewardsDistributionAPI = {
+  // ============ Rankings Management ============
+
+  // Get distribution formula and percentages
+  getFormula: () => api.get('/admin/rankings/formula'),
+
+  // Get all rankings for a period
+  getRankings: (params = {}) => {
+    const { month, year, category } = params
+    return api.get('/admin/rankings', { params: { month, year, category } })
+  },
+
+  // Get specific category ranking
+  getCategoryRanking: (year, month, category) =>
+    api.get(`/admin/rankings/${year}/${month}/${category}`),
+
+  // Set/update rankings for a category
+  setRankings: (data) => {
+    const { month, year, category, rankings, notes } = data
+    return api.post('/admin/rankings', { month, year, category, rankings, notes })
+  },
+
+  // Finalize ranking for distribution
+  finalizeRanking: (month, year, category) =>
+    api.post('/admin/rankings/finalize', { month, year, category }),
+
+  // Unfinalize ranking for editing
+  unfinalizeRanking: (month, year, category) =>
+    api.post('/admin/rankings/unfinalize', { month, year, category }),
+
+  // Delete ranking
+  deleteRanking: (year, month, category) =>
+    api.delete(`/admin/rankings/${year}/${month}/${category}`),
+
+  // ============ Distribution ============
+
+  // Get distribution status for a period
+  getDistributionStatus: (month, year) =>
+    api.get('/admin/distribution/status', { params: { month, year } }),
+
+  // Execute distribution (with optional dry run)
+  executeDistribution: (month, year, dryRun = false) =>
+    api.post('/admin/distribution/execute', { month, year, dryRun }),
+
+  // Get distribution batch details
+  getDistributionBatch: (batchId) =>
+    api.get(`/admin/distribution/batch/${batchId}`),
+
+  // Retry failed distributions
+  retryDistribution: (batchId) =>
+    api.post('/admin/distribution/retry', { batchId }),
+
+  // ============ Statistics ============
+
+  // Get comprehensive reward stats
+  getStats: () => api.get('/admin/rewards/stats'),
+
+  // Get reward transaction history
+  getTransactions: (params = {}) => {
+    const {
+      page = 1,
+      limit = 20,
+      month,
+      year,
+      category,
+      status,
+      walletAddress,
+      sortBy = 'paidAt',
+      sortOrder = 'DESC'
+    } = params
+    return api.get('/admin/rewards/transactions', {
+      params: { page, limit, month, year, category, status, walletAddress, sortBy, sortOrder }
+    })
+  },
+
+  // Get monthly reward breakdown
+  getMonthlyBreakdown: (year) =>
+    api.get('/admin/rewards/monthly-breakdown', { params: { year } }),
+}
+
+// ============================================
 // Admin Wallet Management APIs
 // ============================================
 export const walletsAPI = {
