@@ -10,6 +10,7 @@ import settingsReducer from './slices/settingsSlice'
 import rewardsReducer from './slices/rewardsSlice'
 import walletsReducer from './slices/walletsSlice'
 import bannersReducer from './slices/bannersSlice'
+import treasuryReducer from './slices/treasurySlice'
 
 export const store = configureStore({
   reducer: {
@@ -24,6 +25,7 @@ export const store = configureStore({
     rewards: rewardsReducer,
     wallets: walletsReducer,
     banners: bannersReducer,
+    treasury: treasuryReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -558,3 +558,31 @@ export const bannersAPI = {
   // Delete banner
   deleteBanner: (bannerId) => api.delete(`/admin/banners/${bannerId}`),
 }
+
+// ============================================
+// Treasury Wallet Management APIs
+// ============================================
+export const treasuryAPI = {
+  // Get treasury wallet details with balance and stats
+  getTreasury: () => api.get('/admin/treasury'),
+
+  // Get treasury wallet statistics with monthly breakdown
+  getStatistics: (year) => api.get('/admin/treasury/statistics', { params: { year } }),
+
+  // Get treasury distribution history
+  getHistory: (params = {}) => {
+    const { page = 1, limit = 20, month, year, category, status } = params
+    return api.get('/admin/treasury/history', {
+      params: { page, limit, month, year, category, status }
+    })
+  },
+
+  // Update treasury wallet label/description
+  updateTreasury: (data) => {
+    const { label, description } = data
+    return api.put('/admin/treasury', { label, description })
+  },
+
+  // Get treasury debug info
+  getDebug: () => api.get('/admin/treasury/debug'),
+}

@@ -23,7 +23,15 @@ import {
   CreditCard,
   Coins,
   Gift,
-  Building
+  Building,
+  Vault,
+  TrendingUp,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  History,
+  ArrowUpRight,
+  ArrowDownRight
 } from 'lucide-react'
 import {
   fetchAllSettings,
@@ -42,6 +50,17 @@ import {
   clearUpdateSuccess,
   clearError as clearWalletError
 } from '../store/slices/walletsSlice'
+import {
+  fetchTreasury,
+  fetchTreasuryStatistics,
+  fetchTreasuryHistory,
+  updateTreasury,
+  setSelectedYear,
+  setHistoryFilters,
+  setHistoryPage,
+  clearError as clearTreasuryError,
+  clearUpdateSuccess as clearTreasuryUpdateSuccess
+} from '../store/slices/treasurySlice'
 
 const WALLET_TYPES = [
   { value: 'platformFees', label: 'Platform Fees', icon: CreditCard, color: 'text-green-400' },
@@ -64,6 +83,23 @@ const Settings = () => {
     updateSuccess: walletsUpdateSuccess
   } = useSelector((state) => state.wallets)
 
+  const {
+    wallet: treasuryWallet,
+    balance: treasuryBalance,
+    thisMonth: treasuryThisMonth,
+    allTime: treasuryAllTime,
+    statistics: treasuryStats,
+    selectedYear: treasuryYear,
+    history: treasuryHistory,
+    historyFilters,
+    loading: treasuryLoading,
+    statsLoading: treasuryStatsLoading,
+    historyLoading: treasuryHistoryLoading,
+    updateLoading: treasuryUpdateLoading,
+    error: treasuryError,
+    updateSuccess: treasuryUpdateSuccess
+  } = useSelector((state) => state.treasury)
+
   const [activeTab, setActiveTab] = useState('fees')
   const [pendingChanges, setPendingChanges] = useState({})
   const [showResetModal, setShowResetModal] = useState(false)
@@ -83,6 +119,13 @@ const Settings = () => {
   const [walletToDelete, setWalletToDelete] = useState(null)
   const [copiedAddress, setCopiedAddress] = useState(null)
 
+  // Treasury state
+  const [showTreasuryModal, setShowTreasuryModal] = useState(false)
+  const [treasuryForm, setTreasuryForm] = useState({
+    label: '',
+    description: ''
+  })
+
   useEffect(() => {
     dispatch(fetchAllSettings())
   }, [dispatch])
@@ -93,6 +136,38 @@ const Settings = () => {
       dispatch(fetchPlatformFeesWallet())
     }
   }, [dispatch, activeTab])
+
+  useEffect(() => {
+    if (activeTab === 'treasury') {
+      dispatch(fetchTreasury())
+      dispatch(fetchTreasuryStatistics(treasuryYear))
+      dispatch(fetchTreasuryHistory({
+        ...historyFilters,
+        page: treasuryHistory.pagination.page,
+        limit: treasuryHistory.pagination.limit
+      }))
+    }
+  }, [dispatch, activeTab, treasuryYear])
+
+  useEffect(() => {
+    if (activeTab === 'treasury') {
+      dispatch(fetchTreasuryHistory({
+        ...historyFilters,
+        page: treasuryHistory.pagination.page,
+        limit: treasuryHistory.pagination.limit
+      }))
+    }
+  }, [dispatch, activeTab, historyFilters, treasuryHistory.pagination.page])
+
+  useEffect(() => {
+    if (treasuryUpdateSuccess) {
+      setShowTreasuryModal(false)
+      const timer = setTimeout(() => {
+        dispatch(clearTreasuryUpdateSuccess())
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [treasuryUpdateSuccess, dispatch])
 
   useEffect(() => {
     if (saveSuccess) {
@@ -211,9 +286,54 @@ const Settings = () => {
     return WALLET_TYPES.find(t => t.value === type) || WALLET_TYPES[5]
   }
 
+  // Treasury handlers
+  const handleOpenTreasuryModal = () => {
+    setTreasuryForm({
+      label: treasuryWallet?.label || '',
+      description: treasuryWallet?.description || ''
+    })
+    setShowTreasuryModal(true)
+  }
+
+  const handleSaveTreasury = async () => {
+    await dispatch(updateTreasury(treasuryForm))
+    dispatch(fetchTreasury())
+  }
+
+  const formatXRP = (drops) => {
+    if (!drops) return '0.00'
+    const xrp = parseFloat(drops) / 1000000
+    return xrp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })
+  }
+
+  const getMonthName = (month) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    return months[month - 1] || ''
+  }
+
+  const getCategoryColor = (category) => {
+    switch (category) {
+      case 'trader': return 'text-blue-400 bg-blue-500/20'
+      case 'creator': return 'text-purple-400 bg-purple-500/20'
+      case 'influencer': return 'text-orange-400 bg-orange-500/20'
+      default: return 'text-gray-400 bg-gray-500/20'
+    }
+  }
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'completed': return 'badge-success'
+      case 'pending': return 'bg-yellow-500/20 text-yellow-400'
+      case 'processing': return 'bg-blue-500/20 text-blue-400'
+      case 'failed': return 'bg-red-500/20 text-red-400'
+      default: return 'bg-gray-500/20 text-gray-400'
+    }
+  }
+
   const tabs = [
     { id: 'fees', name: 'Fees', icon: Percent },
     { id: 'wallets', name: 'Wallets', icon: Wallet },
+    { id: 'treasury', name: 'Treasury', icon: Vault },
     { id: 'marketplace', name: 'Marketplace', icon: Building },
     { id: 'drops', name: 'Drops', icon: Layers },
     { id: 'social', name: 'Social', icon: MessageSquare },
@@ -591,6 +711,411 @@ const Settings = () => {
             </div>
           )}
 
+          {/* Treasury Tab */}
+          {activeTab === 'treasury' && (
+            <div className="space-y-6">
+              {/* Treasury Error */}
+              {treasuryError && (
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-between">
+                  <span className="text-red-400">{treasuryError}</span>
+                  <button onClick={() => dispatch(clearTreasuryError())} className="text-red-400 hover:text-red-300">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Treasury Success */}
+              {treasuryUpdateSuccess && (
+                <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-400" />
+                  <span className="text-green-400">Treasury wallet updated successfully!</span>
+                </div>
+              )}
+
+              {/* Treasury Wallet Card */}
+              <div className="p-6 rounded-xl bg-dark-200 border border-gray-800">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
+                      <Vault className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Treasury Wallet</h3>
+                      <p className="text-gray-400 text-sm">Reward distribution wallet</p>
+                    </div>
+                  </div>
+                  {treasuryWallet && (
+                    <button
+                      onClick={handleOpenTreasuryModal}
+                      className="btn-primary flex items-center gap-2"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      Edit Details
+                    </button>
+                  )}
+                </div>
+
+                {treasuryLoading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+                  </div>
+                ) : treasuryWallet ? (
+                  <div className="space-y-4">
+                    {/* Wallet Info */}
+                    <div className="p-4 rounded-xl bg-dark-300 border border-orange-500/30">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-gray-400 text-sm">Wallet Address</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`badge ${treasuryWallet.isActive ? 'badge-success' : 'bg-gray-500/20 text-gray-400'}`}>
+                            {treasuryWallet.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                          <span className="badge bg-orange-500/20 text-orange-400">
+                            {treasuryWallet.configMethod}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-white bg-dark-400 px-4 py-3 rounded-lg font-mono">
+                          {treasuryWallet.address}
+                        </code>
+                        <button
+                          onClick={() => copyToClipboard(treasuryWallet.address, 'treasury')}
+                          className="p-3 rounded-lg bg-dark-400 hover:bg-dark-200 text-gray-400 hover:text-white transition-colors"
+                        >
+                          {copiedAddress === 'treasury' ? (
+                            <CheckCircle className="w-5 h-5 text-green-400" />
+                          ) : (
+                            <Copy className="w-5 h-5" />
+                          )}
+                        </button>
+                      </div>
+                      {treasuryWallet.label && (
+                        <p className="text-gray-300 text-sm mt-3">{treasuryWallet.label}</p>
+                      )}
+                      {treasuryWallet.description && (
+                        <p className="text-gray-500 text-sm mt-1">{treasuryWallet.description}</p>
+                      )}
+                    </div>
+
+                    {/* Balance */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-4 rounded-xl bg-dark-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Coins className="w-4 h-4 text-orange-400" />
+                          <span className="text-gray-400 text-sm">Current Balance</span>
+                        </div>
+                        <p className="text-2xl font-bold text-white">
+                          {treasuryBalance?.xrp || formatXRP(treasuryBalance?.drops)} <span className="text-gray-400 text-sm font-normal">XRP</span>
+                        </p>
+                        {treasuryBalance?.error && (
+                          <p className="text-red-400 text-xs mt-1">{treasuryBalance.error}</p>
+                        )}
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-dark-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <TrendingUp className="w-4 h-4 text-green-400" />
+                          <span className="text-gray-400 text-sm">This Month</span>
+                        </div>
+                        <p className="text-2xl font-bold text-white">
+                          {treasuryThisMonth?.totalDistributedXrp || formatXRP(treasuryThisMonth?.totalDistributed) || '0.00'} <span className="text-gray-400 text-sm font-normal">XRP</span>
+                        </p>
+                        <p className="text-gray-500 text-xs mt-1">
+                          {treasuryThisMonth?.totalRewards || 0} rewards distributed
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-dark-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <History className="w-4 h-4 text-purple-400" />
+                          <span className="text-gray-400 text-sm">All Time</span>
+                        </div>
+                        <p className="text-2xl font-bold text-white">
+                          {treasuryAllTime?.totalDistributedXrp || formatXRP(treasuryAllTime?.totalDistributed) || '0.00'} <span className="text-gray-400 text-sm font-normal">XRP</span>
+                        </p>
+                        <p className="text-gray-500 text-xs mt-1">
+                          {treasuryAllTime?.totalRewards || 0} total rewards
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* This Month Category Breakdown */}
+                    {treasuryThisMonth?.categoryBreakdown && (
+                      <div className="p-4 rounded-xl bg-dark-300">
+                        <h4 className="text-white font-medium mb-4">
+                          {getMonthName(treasuryThisMonth?.month)} {treasuryThisMonth?.year} Breakdown
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {['trader', 'creator', 'influencer'].map(category => {
+                            const data = treasuryThisMonth.categoryBreakdown[category]
+                            if (!data) return null
+                            return (
+                              <div key={category} className="p-3 rounded-lg bg-dark-400">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className={`badge ${getCategoryColor(category)}`}>
+                                    {category.charAt(0).toUpperCase() + category.slice(1)}s
+                                  </span>
+                                  <span className="text-gray-400 text-xs">{data.count} rewards</span>
+                                </div>
+                                <p className="text-white font-semibold">
+                                  {data.amountXrp || formatXRP(data.amount)} XRP
+                                </p>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-8 rounded-xl bg-dark-300 border border-dashed border-gray-600 text-center">
+                    <Vault className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                    <p className="text-gray-400">Treasury wallet not configured</p>
+                    <p className="text-gray-500 text-sm mt-1">
+                      Configure TREASURY_WALLET_SEED or TREASURY_WALLET_SECRET_NUMBERS in your .env file
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Yearly Statistics */}
+              <div className="p-6 rounded-xl bg-dark-200 border border-gray-800">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                      <TrendingUp className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Yearly Statistics</h3>
+                      <p className="text-gray-400 text-sm">Monthly distribution breakdown</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => dispatch(setSelectedYear(treasuryYear - 1))}
+                      className="p-2 rounded-lg hover:bg-dark-300 text-gray-400 hover:text-white"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <span className="text-white font-medium px-3">{treasuryYear}</span>
+                    <button
+                      onClick={() => dispatch(setSelectedYear(treasuryYear + 1))}
+                      disabled={treasuryYear >= new Date().getFullYear()}
+                      className="p-2 rounded-lg hover:bg-dark-300 text-gray-400 hover:text-white disabled:opacity-50"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {treasuryStatsLoading ? (
+                  <div className="flex items-center justify-center h-48">
+                    <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+                  </div>
+                ) : treasuryStats?.monthlyBreakdown ? (
+                  <div className="space-y-4">
+                    {/* Year Total */}
+                    {treasuryStats.yearTotal && (
+                      <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-300">Year Total</span>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-white">
+                              {treasuryStats.yearTotal.amountXrp || formatXRP(treasuryStats.yearTotal.amount)} XRP
+                            </p>
+                            <p className="text-gray-400 text-sm">{treasuryStats.yearTotal.count} rewards</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Monthly Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(month => {
+                        const data = treasuryStats.monthlyBreakdown[month]
+                        const hasData = data && data.total && parseFloat(data.total.amount) > 0
+                        return (
+                          <div
+                            key={month}
+                            className={`p-3 rounded-lg ${hasData ? 'bg-dark-300' : 'bg-dark-400 opacity-50'}`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-gray-400 text-sm">{getMonthName(month)}</span>
+                              {hasData && (
+                                <span className="text-gray-500 text-xs">{data.total.count}</span>
+                              )}
+                            </div>
+                            <p className={`font-semibold ${hasData ? 'text-white' : 'text-gray-600'}`}>
+                              {hasData ? `${data.total.amountXrp || formatXRP(data.total.amount)} XRP` : '--'}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center">
+                    <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                    <p className="text-gray-400">No distribution data for {treasuryYear}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Distribution History */}
+              <div className="p-6 rounded-xl bg-dark-200 border border-gray-800">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                      <History className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Distribution History</h3>
+                      <p className="text-gray-400 text-sm">Recent reward distributions</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filters */}
+                <div className="flex flex-wrap gap-3 mb-4">
+                  <select
+                    value={historyFilters.category || ''}
+                    onChange={(e) => dispatch(setHistoryFilters({ category: e.target.value || undefined }))}
+                    className="input-field w-36"
+                  >
+                    <option value="">All Categories</option>
+                    <option value="trader">Traders</option>
+                    <option value="creator">Creators</option>
+                    <option value="influencer">Influencers</option>
+                  </select>
+
+                  <select
+                    value={historyFilters.status || ''}
+                    onChange={(e) => dispatch(setHistoryFilters({ status: e.target.value || undefined }))}
+                    className="input-field w-36"
+                  >
+                    <option value="">All Status</option>
+                    <option value="completed">Completed</option>
+                    <option value="pending">Pending</option>
+                    <option value="processing">Processing</option>
+                    <option value="failed">Failed</option>
+                  </select>
+
+                  <select
+                    value={historyFilters.month || ''}
+                    onChange={(e) => dispatch(setHistoryFilters({ month: e.target.value ? parseInt(e.target.value) : undefined }))}
+                    className="input-field w-32"
+                  >
+                    <option value="">All Months</option>
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>{getMonthName(i + 1)}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {treasuryHistoryLoading ? (
+                  <div className="flex items-center justify-center h-48">
+                    <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+                  </div>
+                ) : treasuryHistory.distributions.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <History className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                    <p className="text-gray-400">No distributions found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Summary */}
+                    {treasuryHistory.summary && (
+                      <div className="p-3 rounded-lg bg-dark-300 flex items-center justify-between">
+                        <span className="text-gray-400 text-sm">
+                          Total: {treasuryHistory.summary.totalDistributedXrp || formatXRP(treasuryHistory.summary.totalDistributed)} XRP
+                        </span>
+                        <span className="text-gray-400 text-sm">
+                          {treasuryHistory.summary.totalRewards} rewards
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Distribution List */}
+                    <div className="space-y-2">
+                      {treasuryHistory.distributions.map((dist) => (
+                        <div
+                          key={dist.id}
+                          className="p-4 rounded-xl bg-dark-300 flex items-center gap-4"
+                        >
+                          {/* Recipient */}
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            {dist.recipient?.profileImage ? (
+                              <img
+                                src={dist.recipient.profileImage}
+                                alt=""
+                                className="w-10 h-10 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-dark-400 flex items-center justify-center">
+                                <Wallet className="w-5 h-5 text-gray-500" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white font-medium truncate">
+                                  {dist.recipient?.username || dist.recipientWallet?.slice(0, 12) + '...'}
+                                </span>
+                                {dist.recipient?.isVerified && (
+                                  <CheckCircle className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <span className={`badge ${getCategoryColor(dist.category)}`}>
+                                  #{dist.rank} {dist.category}
+                                </span>
+                                <span>{getMonthName(dist.periodMonth)} {dist.periodYear}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Amount */}
+                          <div className="text-right">
+                            <p className="text-white font-semibold">
+                              {dist.amountXrp || formatXRP(dist.amount)} XRP
+                            </p>
+                            <span className={`badge text-xs ${getStatusBadge(dist.transactionStatus)}`}>
+                              {dist.transactionStatus}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Pagination */}
+                    {treasuryHistory.pagination.totalPages > 1 && (
+                      <div className="flex items-center justify-between pt-4 border-t border-gray-700">
+                        <p className="text-gray-400 text-sm">
+                          Page {treasuryHistory.pagination.page} of {treasuryHistory.pagination.totalPages}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => dispatch(setHistoryPage(treasuryHistory.pagination.page - 1))}
+                            disabled={treasuryHistory.pagination.page === 1}
+                            className="p-2 rounded-lg hover:bg-dark-300 disabled:opacity-50 text-gray-400"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => dispatch(setHistoryPage(treasuryHistory.pagination.page + 1))}
+                            disabled={treasuryHistory.pagination.page >= treasuryHistory.pagination.totalPages}
+                            className="p-2 rounded-lg hover:bg-dark-300 disabled:opacity-50 text-gray-400"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Fees Tab */}
           {activeTab === 'fees' && currentSettings.length > 0 && (
             <div className="p-6 rounded-xl bg-dark-200 border border-gray-800">
@@ -907,6 +1432,87 @@ const Settings = () => {
                   <Loader2 className="w-4 h-4 animate-spin mx-auto" />
                 ) : (
                   'Delete Wallet'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Treasury Edit Modal */}
+      {showTreasuryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setShowTreasuryModal(false)} />
+          <div className="relative w-full max-w-lg bg-dark-300 rounded-2xl border border-gray-800 p-6 animate-fade-in">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
+                  <Vault className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-white">Edit Treasury Details</h3>
+              </div>
+              <button
+                onClick={() => setShowTreasuryModal(false)}
+                className="p-2 rounded-lg hover:bg-dark-200 text-gray-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-dark-400">
+                <span className="text-gray-400 text-xs">Wallet Address</span>
+                <p className="text-white font-mono text-sm mt-1">{treasuryWallet?.address}</p>
+              </div>
+
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-2">Label</label>
+                <input
+                  type="text"
+                  value={treasuryForm.label}
+                  onChange={(e) => setTreasuryForm({ ...treasuryForm, label: e.target.value })}
+                  placeholder="e.g., Main Treasury Wallet"
+                  className="input-field w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-2">Description</label>
+                <textarea
+                  value={treasuryForm.description}
+                  onChange={(e) => setTreasuryForm({ ...treasuryForm, description: e.target.value })}
+                  placeholder="Describe the purpose of this treasury wallet..."
+                  className="input-field w-full h-24 resize-none"
+                />
+              </div>
+
+              <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-yellow-400/80 text-sm">
+                    The wallet address is configured via environment variables and cannot be changed from this panel.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 mt-6">
+              <button
+                onClick={() => setShowTreasuryModal(false)}
+                className="btn-secondary flex-1"
+                disabled={treasuryUpdateLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveTreasury}
+                disabled={treasuryUpdateLoading}
+                className="btn-primary flex-1"
+              >
+                {treasuryUpdateLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                ) : (
+                  'Save Changes'
                 )}
               </button>
             </div>
