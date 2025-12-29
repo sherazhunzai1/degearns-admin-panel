@@ -669,3 +669,45 @@ export const treasuryAPI = {
   // Get treasury debug info
   getDebug: () => api.get('/admin/treasury/debug'),
 }
+
+// ============================================
+// Subscription Management APIs
+// ============================================
+export const subscriptionsAPI = {
+  // Get all subscriptions with pagination and filters
+  getSubscriptions: (params = {}) => {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      planType,
+      search
+    } = params
+    return api.get('/admin/subscriptions', {
+      params: { page, limit, status, planType, search }
+    })
+  },
+
+  // Get subscription statistics
+  getStats: () => api.get('/admin/subscriptions/stats'),
+
+  // Create a new subscription for a user
+  createSubscription: (data) => {
+    const { walletAddress, planType, durationDays, paymentTransactionHash, paymentAmount, notes } = data
+    return api.post('/admin/subscriptions', {
+      walletAddress, planType, durationDays, paymentTransactionHash, paymentAmount, notes
+    })
+  },
+
+  // Cancel a subscription
+  cancelSubscription: (subscriptionId, reason) =>
+    api.post(`/admin/subscriptions/${subscriptionId}/cancel`, { reason }),
+
+  // Extend a subscription
+  extendSubscription: (subscriptionId, additionalDays, reason) =>
+    api.post(`/admin/subscriptions/${subscriptionId}/extend`, { additionalDays, reason }),
+
+  // Get user subscription history
+  getUserSubscriptionHistory: (walletAddress) =>
+    api.get(`/admin/scoring/user/${walletAddress}`),
+}

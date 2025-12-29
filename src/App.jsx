@@ -15,6 +15,7 @@ import Posts from "./pages/Posts";
 import Banners from "./pages/Banners";
 import Fees from "./pages/Fees";
 import Rewards from "./pages/Rewards";
+import Subscriptions from "./pages/Subscriptions";
 import Settings from "./pages/Settings";
 
 // Protected Route Component
@@ -85,6 +86,7 @@ function App() {
           <Route path="banners" element={<Banners />} />
           <Route path="fees" element={<Fees />} />
           <Route path="rewards" element={<Rewards />} />
+          <Route path="subscriptions" element={<Subscriptions />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 

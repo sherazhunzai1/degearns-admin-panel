@@ -16,7 +16,8 @@ import {
   MessageSquare,
   DollarSign,
   Image,
-  Gift
+  Gift,
+  Crown
 } from 'lucide-react'
 
 const Layout = () => {
@@ -35,6 +36,7 @@ const Layout = () => {
     { name: 'Banners', href: '/banners', icon: Image },
     { name: 'Fees', href: '/fees', icon: DollarSign },
     { name: 'Rewards', href: '/rewards', icon: Gift },
+    { name: 'Subscriptions', href: '/subscriptions', icon: Crown },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 
