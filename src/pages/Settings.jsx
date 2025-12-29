@@ -31,7 +31,8 @@ import {
   ChevronRight,
   History,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Crown
 } from 'lucide-react'
 import {
   fetchAllSettings,
@@ -68,6 +69,7 @@ const WALLET_TYPES = [
   { value: 'marketplace', label: 'Marketplace', icon: Building, color: 'text-blue-400' },
   { value: 'treasury', label: 'Treasury', icon: Building, color: 'text-orange-400' },
   { value: 'rewards', label: 'Rewards', icon: Gift, color: 'text-yellow-400' },
+  { value: 'subscriptions', label: 'Subscriptions', icon: Crown, color: 'text-pink-400' },
   { value: 'other', label: 'Other', icon: Wallet, color: 'text-gray-400' },
 ]
 
