@@ -15,7 +15,9 @@ import {
   ShoppingCart,
   ShieldCheck,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Sparkles,
+  Zap
 } from 'lucide-react'
 import {
   AreaChart,
@@ -61,28 +63,49 @@ const StatCard = ({ title, value, subValue, icon: Icon, color, loading }) => (
 
 const PerformerCard = ({ performer, rank, type }) => {
   const user = performer.user || {}
+  const metrics = performer.metrics || {}
+  const subscription = performer.subscription || {}
 
-  const getMetricValue = () => {
+  // Convert drops to XRP (1 XRP = 1,000,000 drops)
+  const dropsToXrp = (drops) => {
+    const xrp = parseFloat(drops || 0) / 1000000
+    return xrp >= 1000 ? `${(xrp / 1000).toFixed(1)}K` : xrp.toFixed(2)
+  }
+
+  const getBoostedScore = () => {
     switch (type) {
       case 'trader':
-        return `${parseFloat(performer.totalSpentXrp || 0).toLocaleString()} XRP`
+        return performer.boostedTraderScore?.toFixed(2) || '0'
       case 'creator':
-        return `${parseFloat(performer.totalRevenueXrp || 0).toLocaleString()} XRP`
+        return performer.boostedCreatorScore?.toFixed(2) || '0'
       case 'influencer':
-        return `${(performer.engagementScore || 0).toLocaleString()} pts`
+        return performer.boostedInfluencerScore?.toFixed(2) || '0'
       default:
-        return '-'
+        return '0'
+    }
+  }
+
+  const getBaseScore = () => {
+    switch (type) {
+      case 'trader':
+        return performer.traderScore?.toFixed(2) || '0'
+      case 'creator':
+        return performer.creatorScore?.toFixed(2) || '0'
+      case 'influencer':
+        return performer.influencerScore?.toFixed(2) || '0'
+      default:
+        return '0'
     }
   }
 
   const getMetricLabel = () => {
     switch (type) {
       case 'trader':
-        return `${performer.mintCount || 0} mints`
+        return `${metrics.numberOfTrades || 0} trades • ${dropsToXrp(metrics.totalVolumeSold)} XRP vol`
       case 'creator':
-        return `${performer.totalMints || 0} mints • ${performer.dropCount || 0} drops`
+        return `${metrics.nftsSold || 0} sold • ${dropsToXrp(metrics.totalSalesVolume)} XRP`
       case 'influencer':
-        return `${performer.totalFollowers || 0} followers`
+        return `${metrics.followersCount || 0} followers • ${(metrics.engagementRate || 0).toFixed(1)}% eng`
       default:
         return ''
     }
@@ -95,31 +118,66 @@ const PerformerCard = ({ performer, rank, type }) => {
     return 'bg-gradient-to-br from-gray-600 to-gray-700'
   }
 
+  const getSubscriptionBadge = () => {
+    const planType = subscription.planType?.toLowerCase()
+    switch (planType) {
+      case 'premium':
+        return { color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', label: 'Premium' }
+      case 'pro':
+        return { color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', label: 'Pro' }
+      case 'basic':
+        return { color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', label: 'Basic' }
+      default:
+        return null
+    }
+  }
+
+  const subscriptionBadge = getSubscriptionBadge()
+  const hasBoosted = performer.boostMultiplier && performer.boostMultiplier > 1
+
   return (
     <div className="flex items-center justify-between p-3 rounded-lg bg-dark-300 hover:bg-dark-400 transition-colors">
       <div className="flex items-center gap-3">
         <div className={`w-8 h-8 rounded-full ${getRankBadge()} flex items-center justify-center text-white text-sm font-bold`}>
           {rank}
         </div>
-        {user.profileImage ? (
-          <img src={user.profileImage} alt={user.username} className="w-10 h-10 rounded-full object-cover" />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center">
-            <span className="text-white font-medium text-sm">
-              {(user.username || 'U')[0].toUpperCase()}
-            </span>
-          </div>
-        )}
-        <div>
+        <div className="relative">
+          {user.profileImage ? (
+            <img src={user.profileImage} alt={user.username} className="w-10 h-10 rounded-full object-cover" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center">
+              <span className="text-white font-medium text-sm">
+                {(user.username || 'U')[0].toUpperCase()}
+              </span>
+            </div>
+          )}
+          {subscriptionBadge && (
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-dark-400 flex items-center justify-center">
+              <Zap className="w-3 h-3 text-yellow-400" />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <p className="text-white font-medium text-sm">{user.username || 'Unknown'}</p>
-            {user.isVerified && <ShieldCheck className="w-3.5 h-3.5 text-primary-400" />}
+            <p className="text-white font-medium text-sm truncate">{user.username || 'Unknown'}</p>
+            {user.isVerified && <ShieldCheck className="w-3.5 h-3.5 text-primary-400 flex-shrink-0" />}
           </div>
-          <p className="text-xs text-gray-400">{getMetricLabel()}</p>
+          <p className="text-xs text-gray-400 truncate">{getMetricLabel()}</p>
         </div>
       </div>
-      <div className="text-right">
-        <p className="text-white font-semibold text-sm">{getMetricValue()}</p>
+      <div className="text-right flex-shrink-0 ml-2">
+        <div className="flex items-center justify-end gap-1">
+          <p className="text-white font-semibold text-sm">{getBoostedScore()}</p>
+          {hasBoosted && (
+            <Sparkles className="w-3 h-3 text-yellow-400" />
+          )}
+        </div>
+        {hasBoosted && (
+          <p className="text-xs text-green-400">{subscription.boostPercentage || `+${((performer.boostMultiplier - 1) * 100).toFixed(0)}%`}</p>
+        )}
+        {!hasBoosted && (
+          <p className="text-xs text-gray-500">base: {getBaseScore()}</p>
+        )}
       </div>
     </div>
   )
@@ -316,7 +374,7 @@ const Dashboard = () => {
               <div className="flex items-center gap-2 mb-4">
                 <ShoppingCart className="w-5 h-5 text-blue-400" />
                 <h4 className="text-white font-medium">Top Traders</h4>
-                <span className="text-xs text-gray-400">(by spend)</span>
+                <span className="text-xs text-gray-400">(boosted score)</span>
               </div>
               <div className="space-y-2">
                 {(topPerformers.traders || []).slice(0, 10).map((performer, index) => (
@@ -338,7 +396,7 @@ const Dashboard = () => {
               <div className="flex items-center gap-2 mb-4">
                 <Palette className="w-5 h-5 text-purple-400" />
                 <h4 className="text-white font-medium">Top Creators</h4>
-                <span className="text-xs text-gray-400">(by revenue)</span>
+                <span className="text-xs text-gray-400">(boosted score)</span>
               </div>
               <div className="space-y-2">
                 {(topPerformers.creators || []).slice(0, 10).map((performer, index) => (
@@ -360,7 +418,7 @@ const Dashboard = () => {
               <div className="flex items-center gap-2 mb-4">
                 <Megaphone className="w-5 h-5 text-orange-400" />
                 <h4 className="text-white font-medium">Top Influencers</h4>
-                <span className="text-xs text-gray-400">(by engagement)</span>
+                <span className="text-xs text-gray-400">(boosted score)</span>
               </div>
               <div className="space-y-2">
                 {(topPerformers.influencers || []).slice(0, 10).map((performer, index) => (
