@@ -31,7 +31,9 @@ import {
   History,
   Info,
   Copy,
-  ExternalLink
+  ExternalLink,
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react'
 import {
   fetchFormula,
@@ -54,6 +56,7 @@ import {
   clearDistributionPreview,
   clearDistributionResult
 } from '../store/slices/rewardsDistributionSlice'
+import { leaderboardAPI } from '../services/api'
 
 const CATEGORIES = [
   { id: 'trader', name: 'Traders', icon: TrendingUp, color: 'blue', description: 'Top spenders on minting' },
@@ -105,6 +108,7 @@ const Rewards = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(null)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [copiedAddress, setCopiedAddress] = useState(null)
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false)
 
   // Initial data fetch
   useEffect(() => {
@@ -216,21 +220,100 @@ const Rewards = () => {
     }
   }
 
-  // Ranking management
-  const handleOpenRankingModal = (category) => {
-    const existingRanking = rankings?.find(r => r.category === category)
-    if (existingRanking?.rankings) {
-      setRankingForm(existingRanking.rankings.map(r => ({
-        rank: r.rank,
-        walletAddress: r.walletAddress || ''
-      })))
-      setRankingNotes(existingRanking.notes || '')
-    } else {
-      setRankingForm(Array.from({ length: 10 }, (_, i) => ({ rank: i + 1, walletAddress: '' })))
-      setRankingNotes('')
+  // Map category ID to leaderboard API type
+  const getCategoryLeaderboardType = (categoryId) => {
+    switch (categoryId) {
+      case 'trader': return 'traders'
+      case 'creator': return 'creators'
+      case 'influencer': return 'influencers'
+      default: return 'traders'
     }
+  }
+
+  // Ranking management
+  const handleOpenRankingModal = async (category) => {
     setEditingCategory(category)
     setShowRankingModal(true)
+    setLeaderboardLoading(true)
+
+    // Check if there's existing ranking data
+    const existingRanking = rankings?.find(r => r.category === category)
+    if (existingRanking?.rankings && existingRanking.rankings.length > 0) {
+      // Use existing ranking data
+      setRankingForm(existingRanking.rankings.map(r => ({
+        rank: r.rank,
+        walletAddress: r.walletAddress || '',
+        username: r.username || '',
+        profileImage: r.profileImage || null,
+        isVerified: r.isVerified || false,
+        score: r.score || 0,
+        baseScore: r.baseScore || 0,
+        boostMultiplier: r.boostMultiplier || 1,
+        planType: r.planType || 'free'
+      })))
+      setRankingNotes(existingRanking.notes || '')
+      setLeaderboardLoading(false)
+    } else {
+      // Fetch from leaderboard API
+      try {
+        const leaderboardType = getCategoryLeaderboardType(category)
+        const response = await leaderboardAPI.getLeaderboard(leaderboardType, {
+          month: selectedMonth,
+          year: selectedYear,
+          limit: 10
+        })
+
+        const leaderboard = response.data.data?.leaderboard || []
+
+        // Map leaderboard data to ranking form
+        const formData = leaderboard.map((item, index) => ({
+          rank: item.rank || index + 1,
+          walletAddress: item.walletAddress || '',
+          username: item.user?.username || '',
+          profileImage: item.user?.profileImage || null,
+          isVerified: item.user?.isVerified || false,
+          score: item.score || 0,
+          baseScore: item.baseScore || 0,
+          boostMultiplier: item.boostMultiplier || 1,
+          planType: item.planType || 'free'
+        }))
+
+        // Fill remaining slots if less than 10
+        while (formData.length < 10) {
+          formData.push({
+            rank: formData.length + 1,
+            walletAddress: '',
+            username: '',
+            profileImage: null,
+            isVerified: false,
+            score: 0,
+            baseScore: 0,
+            boostMultiplier: 1,
+            planType: 'free'
+          })
+        }
+
+        setRankingForm(formData)
+        setRankingNotes('')
+      } catch (error) {
+        console.error('Failed to fetch leaderboard:', error)
+        // Fallback to empty form
+        setRankingForm(Array.from({ length: 10 }, (_, i) => ({
+          rank: i + 1,
+          walletAddress: '',
+          username: '',
+          profileImage: null,
+          isVerified: false,
+          score: 0,
+          baseScore: 0,
+          boostMultiplier: 1,
+          planType: 'free'
+        })))
+        setRankingNotes('')
+      } finally {
+        setLeaderboardLoading(false)
+      }
+    }
   }
 
   const handleSaveRankings = async () => {
@@ -1056,13 +1139,16 @@ const Rewards = () => {
       {showRankingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={() => setShowRankingModal(false)} />
-          <div className="relative w-full max-w-2xl bg-dark-300 rounded-2xl border border-gray-800 overflow-hidden animate-fade-in">
+          <div className="relative w-full max-w-3xl bg-dark-300 rounded-2xl border border-gray-800 overflow-hidden animate-fade-in">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
               <div className="flex items-center gap-3">
                 <Award className="w-5 h-5 text-primary-400" />
                 <h3 className="text-lg font-semibold text-white">
                   Set {getCategoryInfo(editingCategory).name} Rankings
                 </h3>
+                <span className="text-gray-400 text-sm">
+                  {getMonthName(selectedMonth)} {selectedYear}
+                </span>
               </div>
               <button
                 onClick={() => setShowRankingModal(false)}
@@ -1073,59 +1159,138 @@ const Rewards = () => {
             </div>
 
             <div className="p-6 max-h-[60vh] overflow-y-auto">
-              <p className="text-gray-400 text-sm mb-4">
-                Enter wallet addresses for each rank position. All 10 positions must be filled.
-              </p>
+              {leaderboardLoading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 text-primary-500 animate-spin mb-3" />
+                  <p className="text-gray-400">Loading leaderboard data...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-gray-400 text-sm">
+                      Rankings pre-filled from leaderboard. All 10 positions must be filled.
+                    </p>
+                    <span className="text-xs text-gray-500">
+                      {rankingForm.filter(r => r.walletAddress.trim()).length}/10 filled
+                    </span>
+                  </div>
 
-              <div className="space-y-3">
-                {rankingForm.map((item, index) => (
-                  <div key={item.rank} className="flex items-center gap-3">
-                    <div className="w-10 flex-shrink-0">
-                      {getRankBadge(item.rank)}
-                    </div>
-                    <input
-                      type="text"
-                      value={item.walletAddress}
-                      onChange={(e) => {
-                        const newForm = [...rankingForm]
-                        newForm[index].walletAddress = e.target.value
-                        setRankingForm(newForm)
-                      }}
-                      placeholder={`Wallet address for rank ${item.rank}`}
-                      className="input-field flex-1 font-mono text-sm"
+                  <div className="space-y-2">
+                    {rankingForm.map((item, index) => (
+                      <div
+                        key={item.rank}
+                        className={`flex items-center gap-3 p-3 rounded-xl transition-colors ${
+                          item.walletAddress ? 'bg-dark-400 border border-gray-700' : 'bg-dark-400/50 border border-dashed border-gray-700'
+                        }`}
+                      >
+                        {/* Rank Badge */}
+                        <div className="w-10 flex-shrink-0 flex items-center justify-center">
+                          {getRankBadge(item.rank)}
+                        </div>
+
+                        {/* User Info */}
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          {/* Profile Image */}
+                          {item.profileImage ? (
+                            <img
+                              src={item.profileImage}
+                              alt={item.username}
+                              className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                              <span className="text-white font-medium text-sm">
+                                {item.username ? item.username[0].toUpperCase() : item.rank}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* User Details */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              {item.username ? (
+                                <>
+                                  <span className="text-white font-medium truncate">{item.username}</span>
+                                  {item.isVerified && (
+                                    <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                                  )}
+                                  {item.boostMultiplier > 1 && (
+                                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 text-xs">
+                                      <Sparkles className="w-3 h-3" />
+                                      {item.planType}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-gray-500 italic">No user data</span>
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              value={item.walletAddress}
+                              onChange={(e) => {
+                                const newForm = [...rankingForm]
+                                newForm[index].walletAddress = e.target.value
+                                // Clear user info if wallet is manually changed
+                                if (e.target.value !== rankingForm[index].walletAddress) {
+                                  newForm[index].username = ''
+                                  newForm[index].profileImage = null
+                                  newForm[index].isVerified = false
+                                }
+                                setRankingForm(newForm)
+                              }}
+                              placeholder={`Wallet address for rank ${item.rank}`}
+                              className="w-full mt-1 px-0 py-1 bg-transparent border-none text-gray-400 text-sm font-mono focus:outline-none focus:text-white placeholder:text-gray-600"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Score */}
+                        {item.score > 0 && (
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-white font-semibold text-sm">{item.score.toFixed(2)}</p>
+                            {item.boostMultiplier > 1 && (
+                              <p className="text-xs text-green-400">+{((item.boostMultiplier - 1) * 100).toFixed(0)}%</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="block text-gray-300 text-sm font-medium mb-2">Notes (optional)</label>
+                    <textarea
+                      value={rankingNotes}
+                      onChange={(e) => setRankingNotes(e.target.value)}
+                      placeholder="e.g., Based on trading volume for the month..."
+                      className="input-field w-full h-20 resize-none"
                     />
                   </div>
-                ))}
-              </div>
-
-              <div className="mt-4">
-                <label className="block text-gray-300 text-sm font-medium mb-2">Notes (optional)</label>
-                <textarea
-                  value={rankingNotes}
-                  onChange={(e) => setRankingNotes(e.target.value)}
-                  placeholder="e.g., Based on trading volume for the month..."
-                  className="input-field w-full h-20 resize-none"
-                />
-              </div>
+                </>
+              )}
             </div>
 
             <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-800">
               <button
                 onClick={() => setShowRankingModal(false)}
                 className="btn-secondary flex-1"
-                disabled={rankingsActionLoading}
+                disabled={rankingsActionLoading || leaderboardLoading}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveRankings}
-                disabled={rankingsActionLoading || rankingForm.filter(r => r.walletAddress.trim()).length !== 10}
-                className="btn-primary flex-1"
+                disabled={rankingsActionLoading || leaderboardLoading || rankingForm.filter(r => r.walletAddress.trim()).length !== 10}
+                className="btn-primary flex-1 flex items-center justify-center gap-2"
               >
                 {rankingsActionLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  'Save Rankings'
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Save Rankings
+                  </>
                 )}
               </button>
             </div>
