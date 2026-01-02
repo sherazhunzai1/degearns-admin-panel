@@ -1,13 +1,27 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
-import { rewardsAPI } from '../../services/api'
+import { rewardsAPI, leaderboardAPI } from '../../services/api'
 
 // Async thunks
 export const fetchTopPerformers = createAsyncThunk(
   'rewards/fetchTopPerformers',
   async (params = {}, { rejectWithValue }) => {
     try {
-      const response = await rewardsAPI.getTopPerformers(params)
-      return response.data.data
+      // Fetch all three leaderboards in parallel
+      const [tradersRes, creatorsRes, influencersRes] = await Promise.all([
+        leaderboardAPI.getTraders({ ...params, limit: params.limit || 10 }),
+        leaderboardAPI.getCreators({ ...params, limit: params.limit || 10 }),
+        leaderboardAPI.getInfluencers({ ...params, limit: params.limit || 10 })
+      ])
+
+      return {
+        traders: tradersRes.data.data?.leaderboard || [],
+        creators: creatorsRes.data.data?.leaderboard || [],
+        influencers: influencersRes.data.data?.leaderboard || [],
+        period: tradersRes.data.data?.period || {
+          month: params.month || new Date().getMonth() + 1,
+          year: params.year || new Date().getFullYear()
+        }
+      }
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch top performers')
     }

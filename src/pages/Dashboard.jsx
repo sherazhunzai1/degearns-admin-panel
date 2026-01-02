@@ -64,48 +64,36 @@ const StatCard = ({ title, value, subValue, icon: Icon, color, loading }) => (
 const PerformerCard = ({ performer, rank, type }) => {
   const user = performer.user || {}
   const metrics = performer.metrics || {}
-  const subscription = performer.subscription || {}
 
-  // Convert drops to XRP (1 XRP = 1,000,000 drops)
-  const dropsToXrp = (drops) => {
-    const xrp = parseFloat(drops || 0) / 1000000
+  // Format XRP value (handles both drops and XRP string)
+  const formatXrp = (value, xrpValue) => {
+    // If XRP value is provided directly, use it
+    if (xrpValue) {
+      const xrp = parseFloat(xrpValue)
+      return xrp >= 1000 ? `${(xrp / 1000).toFixed(1)}K` : xrp.toFixed(2)
+    }
+    // Otherwise convert from drops
+    const xrp = parseFloat(value || 0) / 1000000
     return xrp >= 1000 ? `${(xrp / 1000).toFixed(1)}K` : xrp.toFixed(2)
   }
 
-  const getBoostedScore = () => {
-    switch (type) {
-      case 'trader':
-        return performer.boostedTraderScore?.toFixed(2) || '0'
-      case 'creator':
-        return performer.boostedCreatorScore?.toFixed(2) || '0'
-      case 'influencer':
-        return performer.boostedInfluencerScore?.toFixed(2) || '0'
-      default:
-        return '0'
-    }
+  // Use the unified score field from the new API
+  const getScore = () => {
+    return performer.score?.toFixed(2) || '0'
   }
 
   const getBaseScore = () => {
-    switch (type) {
-      case 'trader':
-        return performer.traderScore?.toFixed(2) || '0'
-      case 'creator':
-        return performer.creatorScore?.toFixed(2) || '0'
-      case 'influencer':
-        return performer.influencerScore?.toFixed(2) || '0'
-      default:
-        return '0'
-    }
+    return performer.baseScore?.toFixed(2) || '0'
   }
 
   const getMetricLabel = () => {
     switch (type) {
       case 'trader':
-        return `${metrics.numberOfTrades || 0} trades • ${dropsToXrp(metrics.totalVolumeSold)} XRP vol`
+        return `${metrics.trades || 0} trades • ${formatXrp(metrics.volumeSold, metrics.volumeSoldXrp)} XRP vol`
       case 'creator':
-        return `${metrics.nftsSold || 0} sold • ${dropsToXrp(metrics.totalSalesVolume)} XRP`
+        return `${metrics.nftsSold || 0} sold • ${formatXrp(metrics.totalSales, metrics.totalSalesXrp)} XRP`
       case 'influencer':
-        return `${metrics.followersCount || 0} followers • ${(metrics.engagementRate || 0).toFixed(1)}% eng`
+        return `${metrics.followers || 0} followers • ${(metrics.engagementRate || 0).toFixed(1)}% eng`
       default:
         return ''
     }
@@ -119,7 +107,8 @@ const PerformerCard = ({ performer, rank, type }) => {
   }
 
   const getSubscriptionBadge = () => {
-    const planType = subscription.planType?.toLowerCase()
+    // planType is now at root level in the new API
+    const planType = performer.planType?.toLowerCase()
     switch (planType) {
       case 'premium':
         return { color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', label: 'Premium' }
@@ -167,13 +156,13 @@ const PerformerCard = ({ performer, rank, type }) => {
       </div>
       <div className="text-right flex-shrink-0 ml-2">
         <div className="flex items-center justify-end gap-1">
-          <p className="text-white font-semibold text-sm">{getBoostedScore()}</p>
+          <p className="text-white font-semibold text-sm">{getScore()}</p>
           {hasBoosted && (
             <Sparkles className="w-3 h-3 text-yellow-400" />
           )}
         </div>
         {hasBoosted && (
-          <p className="text-xs text-green-400">{subscription.boostPercentage || `+${((performer.boostMultiplier - 1) * 100).toFixed(0)}%`}</p>
+          <p className="text-xs text-green-400">+{((performer.boostMultiplier - 1) * 100).toFixed(0)}%</p>
         )}
         {!hasBoosted && (
           <p className="text-xs text-gray-500">base: {getBaseScore()}</p>

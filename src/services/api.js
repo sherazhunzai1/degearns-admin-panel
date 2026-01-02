@@ -711,3 +711,40 @@ export const subscriptionsAPI = {
   getUserSubscriptionHistory: (walletAddress) =>
     api.get(`/admin/scoring/user/${walletAddress}`),
 }
+
+// ============================================
+// Leaderboard APIs (Public)
+// ============================================
+export const leaderboardAPI = {
+  // Get leaderboard by type (traders, creators, influencers)
+  getLeaderboard: (type, params = {}) => {
+    const { page = 1, limit = 20, month, year } = params
+    return api.get(`/leaderboard/${type}`, {
+      params: { page, limit, month, year }
+    })
+  },
+
+  // Get top traders
+  getTraders: (params = {}) => {
+    const { page = 1, limit = 20, month, year } = params
+    return api.get('/leaderboard/traders', {
+      params: { page, limit, month, year }
+    })
+  },
+
+  // Get top creators
+  getCreators: (params = {}) => {
+    const { page = 1, limit = 20, month, year } = params
+    return api.get('/leaderboard/creators', {
+      params: { page, limit, month, year }
+    })
+  },
+
+  // Get top influencers
+  getInfluencers: (params = {}) => {
+    const { page = 1, limit = 20, month, year } = params
+    return api.get('/leaderboard/influencers', {
+      params: { page, limit, month, year }
+    })
+  },
+}
