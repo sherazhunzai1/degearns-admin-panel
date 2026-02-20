@@ -32,13 +32,13 @@ import {
 const OWNERS = [
   {
     id: 'owner1',
-    name: 'Alex Thompson',
+    name: 'Constantinos',
     walletAddress: 'rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe',
     avatar: null
   },
   {
     id: 'owner2',
-    name: 'Jordan Mitchell',
+    name: 'Aristides',
     walletAddress: 'rN7n3gSFtdKkAzQhS3vvWFx6P7JzSNGiNj',
     avatar: null
   }
