@@ -17,7 +17,8 @@ import {
   DollarSign,
   Image,
   Gift,
-  Crown
+  Crown,
+  ArrowUpRight
 } from 'lucide-react'
 
 const Layout = () => {
@@ -37,6 +38,7 @@ const Layout = () => {
     { name: 'Fees', href: '/fees', icon: DollarSign },
     { name: 'Rewards', href: '/rewards', icon: Gift },
     { name: 'Subscriptions', href: '/subscriptions', icon: Crown },
+    { name: 'Withdrawals', href: '/withdrawals', icon: ArrowUpRight },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 
