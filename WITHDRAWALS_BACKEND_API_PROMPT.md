@@ -22,6 +22,14 @@ The platform collects revenue into **three source wallets**:
 There are **three owners**. Each owner has a name and an XRPL wallet address
 stored in the database.
 
+> **Login allowlist:** these three owner wallets are also the *only* wallets
+> allowed to log into the admin panel (via Xaman). The frontend checks the
+> connected wallet against the owner list returned by
+> `GET /admin/withdrawals/owners`. Keep this endpoint readable by the auth
+> layer (or expose a lightweight public `GET /admin/withdrawals/owners/public`
+> that returns just `{ id, name, walletAddress }`) so login can be gated
+> server-side too. Reject any non-owner wallet at authentication time.
+
 A withdrawal works like this:
 
 1. An owner specifies a **total amount** to withdraw and a reason.

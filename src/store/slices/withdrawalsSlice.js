@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import { withdrawalsAPI } from '../../services/api'
+import { DEFAULT_OWNERS, OWNERS_STORAGE_KEY } from '../../services/owners'
 
 // ============================================
 // Multi-Sig Owner Withdrawals Slice
@@ -17,8 +18,9 @@ import { withdrawalsAPI } from '../../services/api'
 
 const REQUIRED_SIGNATURES = 3
 
-// localStorage keys (fallback persistence)
-const OWNERS_KEY = 'degearns_withdrawal_owners'
+// localStorage keys (fallback persistence). The owners key is shared with the
+// auth layer via services/owners.js so login and withdrawals stay in sync.
+const OWNERS_KEY = OWNERS_STORAGE_KEY
 const WITHDRAWALS_KEY = 'degearns_withdrawals'
 
 // The three platform revenue wallets that fund withdrawals.
@@ -42,13 +44,9 @@ export const SOURCE_WALLET_TYPES = [
 
 // ---------------------------------------------
 // Default / seed data (used until the backend is wired up)
+// DEFAULT_OWNERS lives in services/owners.js so the auth layer and the
+// withdrawals page share one source of truth.
 // ---------------------------------------------
-const DEFAULT_OWNERS = [
-  { id: 'owner1', name: 'Constantinos', walletAddress: 'rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe' },
-  { id: 'owner2', name: 'Aristides', walletAddress: 'rN7n3gSFtdKkAzQhS3vvWFx6P7JzSNGiNj' },
-  { id: 'owner3', name: 'Demetrios', walletAddress: 'rsP3mgGb2tcYUrxiLFiHJiQXhsKegYpnQp' },
-]
-
 const DEFAULT_SOURCE_WALLETS = [
   {
     type: 'minting',

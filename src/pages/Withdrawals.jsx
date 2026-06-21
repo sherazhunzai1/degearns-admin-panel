@@ -42,6 +42,7 @@ import {
   clearError,
   clearSuccessMessage,
 } from '../store/slices/withdrawalsSlice'
+import { findOwnerByAddress } from '../services/owners'
 
 // Icons for the three revenue source wallets
 const SOURCE_ICONS = {
@@ -220,6 +221,7 @@ const SignatureProgress = ({ withdrawal, owners }) => {
 
 const Withdrawals = () => {
   const dispatch = useDispatch()
+  const { user } = useSelector((state) => state.auth)
   const {
     owners,
     sourceWallets,
@@ -232,9 +234,12 @@ const Withdrawals = () => {
     successMessage,
   } = useSelector((state) => state.withdrawals)
 
-  // Simulate "acting as" one of the owners (signing happens per-owner)
-  const [currentOwnerIndex, setCurrentOwnerIndex] = useState(0)
-  const currentOwner = owners[currentOwnerIndex] || owners[0] || null
+  // The acting owner is the wallet currently connected via Xaman. Only this
+  // owner can initiate, sign or reject — and only for themselves.
+  const currentOwner =
+    findOwnerByAddress(user?.address, owners) ||
+    owners.find((o) => o.id === user?.ownerId) ||
+    null
 
   // Modal states
   const [showInitiateModal, setShowInitiateModal] = useState(false)
@@ -270,13 +275,6 @@ const Withdrawals = () => {
       return () => clearTimeout(t)
     }
   }, [successMessage, dispatch])
-
-  // Keep current owner index in range as owners load
-  useEffect(() => {
-    if (currentOwnerIndex >= owners.length && owners.length > 0) {
-      setCurrentOwnerIndex(0)
-    }
-  }, [owners, currentOwnerIndex])
 
   // ---- Derived data ----
   const ownerById = (id) => owners.find((o) => o.id === id)
@@ -431,35 +429,41 @@ const Withdrawals = () => {
         </div>
       )}
 
-      {/* Owner Switcher (simulate signing as each owner) */}
-      <div className="p-4 rounded-xl bg-dark-300 border border-dashed border-primary-500/40">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary-500/20 flex items-center justify-center">
-              <Shield className="w-4 h-4 text-primary-400" />
+      {/* Connected owner banner */}
+      {currentOwner ? (
+        <div className="p-4 rounded-xl bg-dark-300 border border-gray-800">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <OwnerAvatar owner={currentOwner} size="lg" />
+              <div>
+                <p className="text-sm text-gray-400">Connected wallet · authorized owner</p>
+                <p className="text-white font-medium">{currentOwner.name}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-400">Signing as:</p>
-              <p className="text-white font-medium">{currentOwner?.name || 'No owner configured'}</p>
+            <div className="flex items-center gap-2">
+              <code className="text-xs text-gray-300 bg-dark-400 px-2 py-1.5 rounded font-mono">
+                {formatAddress(currentOwner.walletAddress)}
+              </code>
+              <span className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 text-xs">
+                <ShieldCheck className="w-3.5 h-3.5" /> Signer
+              </span>
             </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {owners.map((owner, index) => (
-              <button
-                key={owner.id}
-                onClick={() => setCurrentOwnerIndex(index)}
-                className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
-                  index === currentOwnerIndex
-                    ? 'bg-primary-500/20 border-primary-500 text-primary-300'
-                    : 'bg-dark-400 border-gray-700 text-gray-300 hover:text-white hover:border-primary-500'
-                }`}
-              >
-                {owner.name}
-              </button>
-            ))}
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-yellow-400 font-medium">Connected wallet is not a current owner</p>
+              <p className="text-gray-400 text-sm mt-1">
+                Your wallet ({formatAddress(user?.address)}) is not in the current owner list, so you
+                cannot initiate or sign withdrawals. Sign in with one of the three owner wallets.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -778,8 +782,14 @@ const Withdrawals = () => {
               </select>
               <button
                 onClick={() => setShowInitiateModal(true)}
-                disabled={!ownersConfigured}
-                title={!ownersConfigured ? 'Configure 3 owners first' : undefined}
+                disabled={!ownersConfigured || !currentOwner}
+                title={
+                  !currentOwner
+                    ? 'Connect an owner wallet to initiate'
+                    : !ownersConfigured
+                      ? 'Configure 3 owners first'
+                      : undefined
+                }
                 className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-4 h-4" />
@@ -1141,10 +1151,11 @@ const Withdrawals = () => {
                 <div className="flex items-start gap-2">
                   <ShieldCheck className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
                   <p className="text-green-400 text-sm">
+                    Signing as <strong>{currentOwner?.name}</strong> with your connected Xaman wallet.{' '}
                     {(selectedWithdrawal.signatures || []).length + 1 >=
                     (selectedWithdrawal.requiredSignatures || 3)
-                      ? `You are the final signer. Signing now releases ${dropsToXrp(selectedWithdrawal.perOwnerAmount)} XRP to each owner.`
-                      : `Signing as ${currentOwner?.name}. ${(selectedWithdrawal.requiredSignatures || 3) - (selectedWithdrawal.signatures || []).length - 1} more signature(s) required after yours.`}
+                      ? `You are the final signer — this releases ${dropsToXrp(selectedWithdrawal.perOwnerAmount)} XRP to each owner.`
+                      : `${(selectedWithdrawal.requiredSignatures || 3) - (selectedWithdrawal.signatures || []).length - 1} more signature(s) required after yours.`}
                   </p>
                 </div>
               </div>
