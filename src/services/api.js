@@ -713,6 +713,67 @@ export const subscriptionsAPI = {
 }
 
 // ============================================
+// Multi-Sig Owner Withdrawal APIs
+// ============================================
+// NOTE: These endpoints power the 3-of-3 multi-signature owner withdrawal
+// page. The funds are pulled equally from the platform revenue wallets
+// (minting, treasury, subscriptions) and split equally between the three
+// owner wallets once all three owners have signed.
+// See WITHDRAWALS_BACKEND_API_PROMPT.md for the full backend specification.
+export const withdrawalsAPI = {
+  // ============ Owner Management ============
+
+  // Get all configured withdrawal owners (their names + wallet addresses)
+  getOwners: () => api.get('/admin/withdrawals/owners'),
+
+  // Create or update a withdrawal owner
+  saveOwner: (data) => {
+    const { id, name, walletAddress } = data
+    if (id) {
+      return api.put(`/admin/withdrawals/owners/${id}`, { name, walletAddress })
+    }
+    return api.post('/admin/withdrawals/owners', { name, walletAddress })
+  },
+
+  // Delete a withdrawal owner
+  deleteOwner: (ownerId) => api.delete(`/admin/withdrawals/owners/${ownerId}`),
+
+  // ============ Source Wallets ============
+
+  // Get the three platform revenue source wallets (minting, treasury,
+  // subscriptions) with their current balances. The backend decides which
+  // stored wallet maps to each source type.
+  getSourceWallets: () => api.get('/admin/withdrawals/source-wallets'),
+
+  // ============ Withdrawal Requests ============
+
+  // Get all multi-sig withdrawal requests
+  getWithdrawals: (params = {}) => {
+    const { page = 1, limit = 20, status } = params
+    return api.get('/admin/withdrawals', { params: { page, limit, status } })
+  },
+
+  // Get withdrawal statistics
+  getStats: () => api.get('/admin/withdrawals/stats'),
+
+  // Initiate a new withdrawal request. The amount is split equally between
+  // the three owners; the initiating owner's signature is recorded.
+  createWithdrawal: (data) => {
+    const { totalAmount, reason, initiatedBy } = data
+    return api.post('/admin/withdrawals', { totalAmount, reason, initiatedBy })
+  },
+
+  // Add an owner's signature to a pending withdrawal. When the third
+  // signature is added the backend executes the equal split transfer.
+  signWithdrawal: (withdrawalId, ownerId) =>
+    api.post(`/admin/withdrawals/${withdrawalId}/sign`, { ownerId }),
+
+  // Reject a pending withdrawal request
+  rejectWithdrawal: (withdrawalId, ownerId, reason) =>
+    api.post(`/admin/withdrawals/${withdrawalId}/reject`, { ownerId, reason }),
+}
+
+// ============================================
 // Leaderboard APIs (Public)
 // ============================================
 export const leaderboardAPI = {
