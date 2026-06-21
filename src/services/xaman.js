@@ -1,4 +1,5 @@
 import { XummPkce } from 'xumm-oauth2-pkce'
+import { getAuthorizedOwners, findOwnerByAddress } from './owners'
 
 // Xaman (XUMM) Wallet Service
 // This service handles direct Xaman wallet authentication without backend
@@ -6,13 +7,6 @@ import { XummPkce } from 'xumm-oauth2-pkce'
 // You need to create an app at https://apps.xumm.dev to get your API key
 // For development, you can use this demo API key (replace with your own for production)
 const XUMM_API_KEY = import.meta.env.VITE_XUMM_API_KEY || 'your-xumm-api-key'
-
-// List of authorized admin wallet addresses
-// Add your admin wallet addresses here
-const AUTHORIZED_ADMIN_WALLETS = [
-  // Add authorized admin wallet addresses here
-  // Example: 'rYourAdminWalletAddress123'
-]
 
 class XamanService {
   constructor() {
@@ -60,22 +54,26 @@ class XamanService {
         const walletAddress = authResult.me.account
         const userToken = authResult.me.sub
 
-        // Check if wallet is authorized (if admin list is configured)
-        if (AUTHORIZED_ADMIN_WALLETS.length > 0 && !AUTHORIZED_ADMIN_WALLETS.includes(walletAddress)) {
-          this.logout()
+        // Only the three platform owners may access the admin panel.
+        const owners = await getAuthorizedOwners()
+        const owner = findOwnerByAddress(walletAddress, owners)
+        if (!owner) {
+          await this.logout()
           return {
             success: false,
-            error: 'This wallet is not authorized to access the admin panel',
+            error:
+              'This wallet is not one of the three platform owners and cannot access the admin panel.',
           }
         }
 
-        // Create user object
+        // Create user object tied to the matched owner
         const user = {
           id: userToken,
+          ownerId: owner.id,
           address: walletAddress,
-          username: authResult.me.name || `Admin_${walletAddress.slice(0, 6)}`,
+          username: owner.name,
           picture: authResult.me.picture || null,
-          role: 'admin',
+          role: 'owner',
           loginTime: new Date().toISOString(),
         }
 
@@ -120,12 +118,23 @@ class XamanService {
       const state = await this.xumm.state()
 
       if (state && state.me) {
+        const walletAddress = state.me.account
+
+        // Re-validate that the session wallet is still one of the owners.
+        const owners = await getAuthorizedOwners()
+        const owner = findOwnerByAddress(walletAddress, owners)
+        if (!owner) {
+          await this.logout()
+          return { authenticated: false }
+        }
+
         const user = {
           id: state.me.sub,
-          address: state.me.account,
-          username: state.me.name || `Admin_${state.me.account.slice(0, 6)}`,
+          ownerId: owner.id,
+          address: walletAddress,
+          username: owner.name,
           picture: state.me.picture || null,
-          role: 'admin',
+          role: 'owner',
           loginTime: new Date().toISOString(),
         }
 

@@ -5,7 +5,6 @@ import {
   loginWithXaman,
   clearError,
   resetLoginState,
-  demoLogin,
 } from '../store/slices/authSlice'
 
 const Login = () => {
@@ -19,10 +18,6 @@ const Login = () => {
   const handleConnectWallet = useCallback(async () => {
     dispatch(clearError())
     dispatch(loginWithXaman())
-  }, [dispatch])
-
-  const handleDemoLogin = useCallback(() => {
-    dispatch(demoLogin())
   }, [dispatch])
 
   const handleRetry = useCallback(() => {
@@ -106,7 +101,7 @@ const Login = () => {
                   <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
                     <Wallet className="w-4 h-4 text-green-400" />
                   </div>
-                  <span className="text-sm">Admin-only wallet access</span>
+                  <span className="text-sm">Owner-only wallet access</span>
                 </div>
                 <div className="flex items-center gap-3 text-gray-300">
                   <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
@@ -147,32 +142,13 @@ const Login = () => {
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
-
-              {/* Divider */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-700"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-dark-300 text-gray-500">or</span>
-                </div>
-              </div>
-
-              {/* Demo Login */}
-              <button
-                onClick={handleDemoLogin}
-                className="w-full py-3 px-6 bg-dark-300 rounded-xl text-gray-300 font-medium
-                         hover:bg-dark-200 transition-colors flex items-center justify-center gap-2"
-              >
-                Demo Login (for testing)
-              </button>
             </>
           )}
         </div>
 
         {/* Footer */}
         <p className="text-center text-gray-500 text-sm mt-6">
-          Only authorized admin wallets can access this panel
+          Only the three platform owner wallets can access this panel
         </p>
 
         {/* Setup Instructions */}

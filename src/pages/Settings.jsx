@@ -65,6 +65,7 @@ import {
 
 const WALLET_TYPES = [
   { value: 'platformFees', label: 'Platform Fees', icon: CreditCard, color: 'text-green-400' },
+  { value: 'minting', label: 'Minting', icon: Coins, color: 'text-cyan-400' },
   { value: 'royalties', label: 'Royalties', icon: Coins, color: 'text-purple-400' },
   { value: 'marketplace', label: 'Marketplace', icon: Building, color: 'text-blue-400' },
   { value: 'treasury', label: 'Treasury', icon: Building, color: 'text-orange-400' },

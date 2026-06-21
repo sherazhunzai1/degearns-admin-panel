@@ -1,9 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import xamanService from '../../services/xaman'
+import { isAuthorizedOwnerSync } from '../../services/owners'
 
 // Check for existing auth on load
 const getInitialState = () => {
-  const token = localStorage.getItem('degearns_admin_token')
+  let token = localStorage.getItem('degearns_admin_token')
   const userStr = localStorage.getItem('degearns_admin_user')
   let user = null
 
@@ -11,6 +12,15 @@ const getInitialState = () => {
     user = userStr ? JSON.parse(userStr) : null
   } catch (e) {
     localStorage.removeItem('degearns_admin_user')
+  }
+
+  // Only the three platform owners may hold a session. Clear any stale or
+  // non-owner session (e.g. a legacy demo login) before restoring it.
+  if (user && !isAuthorizedOwnerSync(user.address)) {
+    localStorage.removeItem('degearns_admin_token')
+    localStorage.removeItem('degearns_admin_user')
+    user = null
+    token = null
   }
 
   return {
@@ -80,22 +90,6 @@ const authSlice = createSlice({
       state.loginStep = 'idle'
       state.error = null
     },
-    // Demo login for testing
-    demoLogin: (state) => {
-      const demoUser = {
-        id: 'demo-admin',
-        address: 'rDeGeArNsAdMiN1234567890XRP',
-        username: 'Demo Admin',
-        role: 'admin',
-        loginTime: new Date().toISOString(),
-      }
-      state.user = demoUser
-      state.token = 'demo-token'
-      state.isAuthenticated = true
-      state.loginStep = 'success'
-      localStorage.setItem('degearns_admin_token', 'demo-token')
-      localStorage.setItem('degearns_admin_user', JSON.stringify(demoUser))
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -150,7 +144,6 @@ export const {
   clearError,
   setLoginStep,
   resetLoginState,
-  demoLogin,
 } = authSlice.actions
 
 export default authSlice.reducer
