@@ -314,7 +314,7 @@ const Withdrawals = () => {
 
   // Load data (re-fetch chain-specific data when the active chain changes)
   useEffect(() => {
-    dispatch(fetchOwners())
+    dispatch(fetchOwners(chain))
     dispatch(fetchSourceWallets(chain))
     dispatch(fetchWithdrawals(chain))
   }, [dispatch, chain])

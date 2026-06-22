@@ -176,18 +176,49 @@ const extractSourceWallets = (data) => {
 // Async Thunks (API first, localStorage fallback)
 // ============================================
 
-export const fetchOwners = createAsyncThunk('withdrawals/fetchOwners', async () => {
+export const fetchOwners = createAsyncThunk('withdrawals/fetchOwners', async (chain = 'xrpl') => {
+  // Best-effort full owners list (id, name, both addresses) used as a base.
+  let fullOwners = []
   try {
     const response = await withdrawalsAPI.getOwners()
-    const owners = response.data?.data?.owners || response.data?.data || []
-    if (Array.isArray(owners) && owners.length > 0) {
-      saveToStorage(OWNERS_STORAGE_KEY, owners)
-      return owners
-    }
-    return loadFromStorage(OWNERS_STORAGE_KEY, DEFAULT_OWNERS)
+    const list = response.data?.data?.owners || response.data?.data || []
+    if (Array.isArray(list)) fullOwners = list
+    if (fullOwners.length > 0) saveToStorage(OWNERS_STORAGE_KEY, fullOwners)
   } catch {
+    /* ignore — fall back below */
+  }
+
+  if (chain === 'solana') {
+    // Source of truth for Solana owners: the public Solana owners endpoint.
+    let solOwners = []
+    try {
+      const res = await withdrawalsAPI.getSolanaOwnersPublic()
+      solOwners = res.data?.data?.owners || res.data?.data || []
+    } catch {
+      /* ignore */
+    }
+    if (Array.isArray(solOwners) && solOwners.length > 0) {
+      // Overlay the Solana address from the public endpoint; keep the XRPL
+      // address from the full record when available (for the editor / cards).
+      return solOwners.map((o) => {
+        const full = fullOwners.find((f) => f.id === o.id) || {}
+        return {
+          ...full,
+          id: o.id ?? full.id,
+          name: o.name ?? full.name,
+          solanaAddress:
+            o.solanaAddress ?? o.solana ?? o.address ?? o.publicKey ?? o.walletAddress ?? full.solanaAddress,
+          walletAddress: full.walletAddress,
+        }
+      })
+    }
+    if (fullOwners.length > 0) return fullOwners
     return loadFromStorage(OWNERS_STORAGE_KEY, DEFAULT_OWNERS)
   }
+
+  // XRPL
+  if (fullOwners.length > 0) return fullOwners
+  return loadFromStorage(OWNERS_STORAGE_KEY, DEFAULT_OWNERS)
 })
 
 export const saveOwner = createAsyncThunk('withdrawals/saveOwner', async (owner, { getState }) => {
