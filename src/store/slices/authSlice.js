@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
-import xamanService from '../../services/xaman'
-import { isAuthorizedOwnerSync } from '../../services/owners'
+import phantomService from '../../services/phantom'
+import { isAuthorizedSolanaOwnerSync } from '../../services/owners'
 
 // Check for existing auth on load
 const getInitialState = () => {
@@ -15,8 +15,8 @@ const getInitialState = () => {
   }
 
   // Only the three platform owners may hold a session. Clear any stale or
-  // non-owner session (e.g. a legacy demo login) before restoring it.
-  if (user && !isAuthorizedOwnerSync(user.address)) {
+  // non-owner session (e.g. a legacy demo / Xaman login) before restoring it.
+  if (user && !isAuthorizedSolanaOwnerSync(user.address)) {
     localStorage.removeItem('degearns_admin_token')
     localStorage.removeItem('degearns_admin_user')
     user = null
@@ -35,12 +35,12 @@ const getInitialState = () => {
   }
 }
 
-// Async thunk to login with Xaman wallet
-export const loginWithXaman = createAsyncThunk(
-  'auth/loginWithXaman',
+// Async thunk to login with Phantom (Solana) wallet
+export const loginWithPhantom = createAsyncThunk(
+  'auth/loginWithPhantom',
   async (_, { rejectWithValue }) => {
     try {
-      const result = await xamanService.initiateLogin()
+      const result = await phantomService.initiateLogin()
 
       if (!result.success) {
         return rejectWithValue(result.error || 'Login failed')
@@ -48,7 +48,7 @@ export const loginWithXaman = createAsyncThunk(
 
       return result
     } catch (error) {
-      return rejectWithValue(error.message || 'Failed to connect to Xaman wallet')
+      return rejectWithValue(error.message || 'Failed to connect to Phantom wallet')
     }
   }
 )
@@ -58,7 +58,7 @@ export const checkExistingAuth = createAsyncThunk(
   'auth/checkExistingAuth',
   async (_, { rejectWithValue }) => {
     try {
-      const result = await xamanService.checkExistingAuth()
+      const result = await phantomService.checkExistingAuth()
       return result
     } catch (error) {
       return rejectWithValue(error.message || 'Failed to check authentication')
@@ -70,7 +70,7 @@ export const checkExistingAuth = createAsyncThunk(
 export const logout = createAsyncThunk(
   'auth/logout',
   async () => {
-    await xamanService.logout()
+    await phantomService.logout()
     return null
   }
 )
@@ -93,13 +93,13 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Login with Xaman
-      .addCase(loginWithXaman.pending, (state) => {
+      // Login with Phantom
+      .addCase(loginWithPhantom.pending, (state) => {
         state.loginLoading = true
         state.error = null
         state.loginStep = 'connecting'
       })
-      .addCase(loginWithXaman.fulfilled, (state, action) => {
+      .addCase(loginWithPhantom.fulfilled, (state, action) => {
         state.loginLoading = false
         state.user = action.payload.user
         state.token = action.payload.token
@@ -107,7 +107,7 @@ const authSlice = createSlice({
         state.loginStep = 'success'
         state.error = null
       })
-      .addCase(loginWithXaman.rejected, (state, action) => {
+      .addCase(loginWithPhantom.rejected, (state, action) => {
         state.loginLoading = false
         state.error = action.payload || 'Login failed'
         state.loginStep = 'error'

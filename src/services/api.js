@@ -586,7 +586,7 @@ export const walletsAPI = {
 }
 
 // ============================================
-// Auth APIs (kept for reference, using Xaman direct auth)
+// Auth APIs (kept for reference, using Phantom/Solana direct wallet auth)
 // ============================================
 export const authAPI = {
   // Get current admin profile
@@ -726,17 +726,22 @@ export const withdrawalsAPI = {
   // Get all configured withdrawal owners (their names + wallet addresses)
   getOwners: () => api.get('/admin/withdrawals/owners'),
 
-  // Create or update a withdrawal owner
+  // Create or update a withdrawal owner. `walletAddress` is the XRPL
+  // withdrawal destination; `solanaAddress` is the Phantom login identity.
   saveOwner: (data) => {
-    const { id, name, walletAddress } = data
+    const { id, name, walletAddress, solanaAddress } = data
     if (id) {
-      return api.put(`/admin/withdrawals/owners/${id}`, { name, walletAddress })
+      return api.put(`/admin/withdrawals/owners/${id}`, { name, walletAddress, solanaAddress })
     }
-    return api.post('/admin/withdrawals/owners', { name, walletAddress })
+    return api.post('/admin/withdrawals/owners', { name, walletAddress, solanaAddress })
   },
 
   // Delete a withdrawal owner
   deleteOwner: (ownerId) => api.delete(`/admin/withdrawals/owners/${ownerId}`),
+
+  // Public list of owner Solana wallet addresses — used as the login
+  // allowlist for Phantom wallet authentication (no auth token required).
+  getSolanaOwnersPublic: () => api.get('/admin/withdrawals/owners/solana/public'),
 
   // ============ Source Wallets ============
 

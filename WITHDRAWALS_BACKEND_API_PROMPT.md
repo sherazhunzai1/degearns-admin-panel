@@ -19,16 +19,18 @@ The platform collects revenue into **three source wallets**:
 2. **Treasury Wallet** — platform treasury revenue
 3. **Subscriptions Wallet** — subscription revenue
 
-There are **three owners**. Each owner has a name and an XRPL wallet address
-stored in the database.
+There are **three owners**. Each owner has:
+- a name,
+- an XRPL wallet address (`walletAddress`) — the **withdrawal destination**, and
+- a Solana wallet address (`solanaAddress`) — the **admin-panel login identity**.
 
-> **Login allowlist:** these three owner wallets are also the *only* wallets
-> allowed to log into the admin panel (via Xaman). The frontend checks the
-> connected wallet against the owner list returned by
-> `GET /admin/withdrawals/owners`. Keep this endpoint readable by the auth
-> layer (or expose a lightweight public `GET /admin/withdrawals/owners/public`
-> that returns just `{ id, name, walletAddress }`) so login can be gated
-> server-side too. Reject any non-owner wallet at authentication time.
+> **Login allowlist (Phantom / Solana):** admin-panel login is done with the
+> **Phantom** wallet (Solana). The three owner Solana wallets are the *only*
+> wallets allowed to log in. The frontend reads the allowlist from the public
+> endpoint **`GET /admin/withdrawals/owners/solana/public`** (no auth token —
+> it is called before login) and rejects any connected Phantom wallet that is
+> not in it. Enforce this server-side too: reject authentication for any
+> non-owner Solana wallet.
 
 A withdrawal works like this:
 
@@ -73,17 +75,19 @@ A withdrawal works like this:
 ## 3. Database Schema (suggested)
 
 ### `withdrawal_owners`
-| Column          | Type        | Notes                                  |
-|-----------------|-------------|----------------------------------------|
-| id              | uuid / pk   |                                        |
-| name            | string      | Display name (e.g. "Constantinos")     |
-| wallet_address  | string      | XRPL r-address, validated, unique      |
-| position        | int         | 1..3 ordering (optional)               |
-| is_active       | boolean     | default true                           |
-| created_at      | timestamp   |                                        |
-| updated_at      | timestamp   |                                        |
+| Column          | Type        | Notes                                            |
+|-----------------|-------------|--------------------------------------------------|
+| id              | uuid / pk   |                                                  |
+| name            | string      | Display name (e.g. "Constantinos")               |
+| wallet_address  | string      | XRPL r-address (withdrawal destination), unique  |
+| solana_address  | string      | Solana base58 address (Phantom login), unique    |
+| position        | int         | 1..3 ordering (optional)                         |
+| is_active       | boolean     | default true                                     |
+| created_at      | timestamp   |                                                  |
+| updated_at      | timestamp   |                                                  |
 
 > Enforce a **maximum of 3 active owners**. Reject the 4th with `409`.
+> Validate `solana_address` as base58 (`^[1-9A-HJ-NP-Za-km-z]{32,44}$`).
 
 ### `withdrawals`
 | Column             | Type      | Notes                                          |
@@ -121,16 +125,31 @@ table to record the on-chain transaction per owner once executed.
 
 ### 4.1 Owner Management
 
-#### `GET /admin/withdrawals/owners`
-Returns all configured owners.
+#### `GET /admin/withdrawals/owners/solana/public` 🔓 public (no auth)
+**Login allowlist.** Returns the owners' Solana addresses so the frontend can
+gate Phantom login before any token exists. Return only non-sensitive fields.
 
 **Response `data`:**
 ```json
 {
   "owners": [
-    { "id": "owner1", "name": "Constantinos", "walletAddress": "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" },
-    { "id": "owner2", "name": "Aristides",    "walletAddress": "rN7n3gSFtdKkAzQhS3vvWFx6P7JzSNGiNj" },
-    { "id": "owner3", "name": "Demetrios",    "walletAddress": "rsP3mgGb2tcYUrxiLFiHJiQXhsKegYpnQp" }
+    { "id": "owner1", "name": "Constantinos", "solanaAddress": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" },
+    { "id": "owner2", "name": "Aristides",    "solanaAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" },
+    { "id": "owner3", "name": "Demetrios",    "solanaAddress": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" }
+  ]
+}
+```
+
+#### `GET /admin/withdrawals/owners` 🔒 admin
+Returns all configured owners (full records).
+
+**Response `data`:**
+```json
+{
+  "owners": [
+    { "id": "owner1", "name": "Constantinos", "walletAddress": "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe", "solanaAddress": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" },
+    { "id": "owner2", "name": "Aristides",    "walletAddress": "rN7n3gSFtdKkAzQhS3vvWFx6P7JzSNGiNj", "solanaAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" },
+    { "id": "owner3", "name": "Demetrios",    "walletAddress": "rsP3mgGb2tcYUrxiLFiHJiQXhsKegYpnQp", "solanaAddress": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" }
   ]
 }
 ```
@@ -138,15 +157,16 @@ Returns all configured owners.
 #### `POST /admin/withdrawals/owners`
 Create a new owner (reject if 3 already exist).
 
-**Body:** `{ "name": "string", "walletAddress": "rXXX..." }`
-**Validation:** `walletAddress` must match `^r[1-9A-HJ-NP-Za-km-z]{24,34}$` and be unique.
-**Response `data`:** `{ "owner": { "id", "name", "walletAddress" } }`
+**Body:** `{ "name": "string", "walletAddress": "rXXX...", "solanaAddress": "..." }`
+**Validation:** `walletAddress` matches `^r[1-9A-HJ-NP-Za-km-z]{24,34}$`; `solanaAddress`
+matches `^[1-9A-HJ-NP-Za-km-z]{32,44}$`; both unique.
+**Response `data`:** `{ "owner": { "id", "name", "walletAddress", "solanaAddress" } }`
 
 #### `PUT /admin/withdrawals/owners/:id`
-Update an owner's name and/or wallet address.
+Update an owner's name, XRPL address and/or Solana address.
 
-**Body:** `{ "name": "string", "walletAddress": "rXXX..." }`
-**Response `data`:** `{ "owner": { "id", "name", "walletAddress" } }`
+**Body:** `{ "name": "string", "walletAddress": "rXXX...", "solanaAddress": "..." }`
+**Response `data`:** `{ "owner": { "id", "name", "walletAddress", "solanaAddress" } }`
 
 #### `DELETE /admin/withdrawals/owners/:id`
 Remove an owner. **Response:** `{ "success": true }`
@@ -333,8 +353,9 @@ The admin panel calls these methods (see `src/services/api.js`):
 
 | Method | HTTP |
 |--------|------|
+| `withdrawalsAPI.getSolanaOwnersPublic()` | `GET /admin/withdrawals/owners/solana/public` (public — Phantom login allowlist) |
 | `withdrawalsAPI.getOwners()` | `GET /admin/withdrawals/owners` |
-| `withdrawalsAPI.saveOwner({id?, name, walletAddress})` | `POST` (create) / `PUT /:id` (update) |
+| `withdrawalsAPI.saveOwner({id?, name, walletAddress, solanaAddress})` | `POST` (create) / `PUT /:id` (update) |
 | `withdrawalsAPI.deleteOwner(id)` | `DELETE /admin/withdrawals/owners/:id` |
 | `withdrawalsAPI.getSourceWallets()` | `GET /admin/withdrawals/source-wallets` |
 | `withdrawalsAPI.getWithdrawals({page,limit,status})` | `GET /admin/withdrawals` |

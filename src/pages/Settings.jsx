@@ -1262,7 +1262,7 @@ const Settings = () => {
                     </p>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between p-3 rounded-lg bg-dark-400">
-                        <code className="text-sm text-gray-300">Connected via Xaman Wallet</code>
+                        <code className="text-sm text-gray-300">Connected via Phantom Wallet</code>
                         <span className="badge badge-success">Current Admin</span>
                       </div>
                     </div>

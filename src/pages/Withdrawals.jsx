@@ -42,7 +42,7 @@ import {
   clearError,
   clearSuccessMessage,
 } from '../store/slices/withdrawalsSlice'
-import { findOwnerByAddress } from '../services/owners'
+import { findOwnerByAddress, findOwnerBySolanaAddress } from '../services/owners'
 
 // Icons for the three revenue source wallets
 const SOURCE_ICONS = {
@@ -87,6 +87,9 @@ const formatAddress = (address) => {
 
 const isValidXrplAddress = (address) =>
   typeof address === 'string' && /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(address.trim())
+
+const isValidSolanaAddress = (address) =>
+  typeof address === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address.trim())
 
 const initials = (name) =>
   (name || '?')
@@ -234,11 +237,13 @@ const Withdrawals = () => {
     successMessage,
   } = useSelector((state) => state.withdrawals)
 
-  // The acting owner is the wallet currently connected via Xaman. Only this
-  // owner can initiate, sign or reject — and only for themselves.
+  // The acting owner is the wallet currently connected via Phantom. Only this
+  // owner can initiate, sign or reject — and only for themselves. Login is by
+  // Solana address, so match on owner id first, then by address.
   const currentOwner =
-    findOwnerByAddress(user?.address, owners) ||
     owners.find((o) => o.id === user?.ownerId) ||
+    findOwnerBySolanaAddress(user?.address, owners) ||
+    findOwnerByAddress(user?.address, owners) ||
     null
 
   // Modal states
@@ -252,7 +257,7 @@ const Withdrawals = () => {
 
   // Form states
   const [initiateForm, setInitiateForm] = useState({ amount: '', reason: '' })
-  const [ownerForm, setOwnerForm] = useState({ id: null, name: '', walletAddress: '' })
+  const [ownerForm, setOwnerForm] = useState({ id: null, name: '', walletAddress: '', solanaAddress: '' })
   const [rejectionReason, setRejectionReason] = useState('')
 
   // Filters
@@ -391,20 +396,35 @@ const Withdrawals = () => {
   const handleOpenOwnerModal = (owner = null, slotIndex = null) => {
     if (owner) {
       setEditingOwner(owner)
-      setOwnerForm({ id: owner.id, name: owner.name, walletAddress: owner.walletAddress })
+      setOwnerForm({
+        id: owner.id,
+        name: owner.name,
+        walletAddress: owner.walletAddress || '',
+        solanaAddress: owner.solanaAddress || '',
+      })
     } else {
       setEditingOwner(null)
-      setOwnerForm({ id: null, name: `Owner ${slotIndex != null ? slotIndex + 1 : owners.length + 1}`, walletAddress: '' })
+      setOwnerForm({
+        id: null,
+        name: `Owner ${slotIndex != null ? slotIndex + 1 : owners.length + 1}`,
+        walletAddress: '',
+        solanaAddress: '',
+      })
     }
     setShowOwnerModal(true)
   }
 
+  const ownerFormValid =
+    ownerForm.name &&
+    isValidXrplAddress(ownerForm.walletAddress) &&
+    isValidSolanaAddress(ownerForm.solanaAddress)
+
   const handleSaveOwner = async () => {
-    if (!ownerForm.name || !isValidXrplAddress(ownerForm.walletAddress)) return
+    if (!ownerFormValid) return
     await dispatch(saveOwner(ownerForm))
     setShowOwnerModal(false)
     setEditingOwner(null)
-    setOwnerForm({ id: null, name: '', walletAddress: '' })
+    setOwnerForm({ id: null, name: '', walletAddress: '', solanaAddress: '' })
   }
 
   const ownerSlots = Math.max(3, owners.length)
@@ -436,13 +456,13 @@ const Withdrawals = () => {
             <div className="flex items-center gap-3">
               <OwnerAvatar owner={currentOwner} size="lg" />
               <div>
-                <p className="text-sm text-gray-400">Connected wallet · authorized owner</p>
+                <p className="text-sm text-gray-400">Connected Phantom wallet · authorized owner</p>
                 <p className="text-white font-medium">{currentOwner.name}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <code className="text-xs text-gray-300 bg-dark-400 px-2 py-1.5 rounded font-mono">
-                {formatAddress(currentOwner.walletAddress)}
+                {formatAddress(user?.address)}
               </code>
               <span className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 text-xs">
                 <ShieldCheck className="w-3.5 h-3.5" /> Signer
@@ -632,33 +652,47 @@ const Withdrawals = () => {
                     <Edit3 className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="flex items-center gap-2 mb-2">
-                  <code className="flex-1 text-xs text-gray-300 bg-dark-300 px-2 py-1.5 rounded font-mono truncate">
-                    {owner.walletAddress || 'No address set'}
+                <div className="mb-2">
+                  <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">XRPL payout</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs text-gray-300 bg-dark-300 px-2 py-1.5 rounded font-mono truncate">
+                      {owner.walletAddress || 'No address set'}
+                    </code>
+                    {owner.walletAddress && (
+                      <button
+                        onClick={() => copyToClipboard(owner.walletAddress, `owner-${owner.id}`)}
+                        className="p-1.5 rounded-lg bg-dark-300 hover:bg-dark-200 text-gray-400 hover:text-white transition-colors"
+                      >
+                        {copiedKey === `owner-${owner.id}` ? (
+                          <Check className="w-3.5 h-3.5 text-green-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="mb-2">
+                  <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Phantom login</p>
+                  <code className="block text-xs text-gray-300 bg-dark-300 px-2 py-1.5 rounded font-mono truncate">
+                    {owner.solanaAddress || 'No Solana address set'}
                   </code>
-                  {owner.walletAddress && (
-                    <button
-                      onClick={() => copyToClipboard(owner.walletAddress, `owner-${owner.id}`)}
-                      className="p-1.5 rounded-lg bg-dark-300 hover:bg-dark-200 text-gray-400 hover:text-white transition-colors"
-                    >
-                      {copiedKey === `owner-${owner.id}` ? (
-                        <Check className="w-3.5 h-3.5 text-green-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {valid ? (
+                  {valid && isValidSolanaAddress(owner.solanaAddress) ? (
                     <>
                       <ShieldCheck className="w-4 h-4 text-green-400" />
-                      <span className="text-sm text-green-400">Authorized Signer</span>
+                      <span className="text-sm text-green-400">Authorized Signer &amp; Login</span>
+                    </>
+                  ) : valid ? (
+                    <>
+                      <ShieldAlert className="w-4 h-4 text-yellow-400" />
+                      <span className="text-sm text-yellow-400">No valid login wallet</span>
                     </>
                   ) : (
                     <>
                       <ShieldAlert className="w-4 h-4 text-yellow-400" />
-                      <span className="text-sm text-yellow-400">Invalid address</span>
+                      <span className="text-sm text-yellow-400">Invalid payout address</span>
                     </>
                   )}
                 </div>
@@ -1151,7 +1185,7 @@ const Withdrawals = () => {
                 <div className="flex items-start gap-2">
                   <ShieldCheck className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
                   <p className="text-green-400 text-sm">
-                    Signing as <strong>{currentOwner?.name}</strong> with your connected Xaman wallet.{' '}
+                    Signing as <strong>{currentOwner?.name}</strong> with your connected Phantom wallet.{' '}
                     {(selectedWithdrawal.signatures || []).length + 1 >=
                     (selectedWithdrawal.requiredSignatures || 3)
                       ? `You are the final signer — this releases ${dropsToXrp(selectedWithdrawal.perOwnerAmount)} XRP to each owner.`
@@ -1309,7 +1343,9 @@ const Withdrawals = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Wallet Address *</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  XRPL Wallet Address * <span className="text-gray-500 font-normal">(withdrawal payout)</span>
+                </label>
                 <input
                   type="text"
                   value={ownerForm.walletAddress}
@@ -1323,8 +1359,28 @@ const Withdrawals = () => {
                   </p>
                 )}
                 <p className="text-gray-500 text-xs mt-1">
-                  This address is stored in the database and receives an equal share of every
-                  withdrawal.
+                  Receives an equal share of every withdrawal.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Solana Address * <span className="text-gray-500 font-normal">(Phantom login)</span>
+                </label>
+                <input
+                  type="text"
+                  value={ownerForm.solanaAddress}
+                  onChange={(e) => setOwnerForm({ ...ownerForm, solanaAddress: e.target.value })}
+                  placeholder="Phantom wallet address..."
+                  className="w-full px-3 py-2 rounded-lg bg-dark-400 border border-gray-700 text-white font-mono focus:outline-none focus:border-primary-500"
+                />
+                {ownerForm.solanaAddress && !isValidSolanaAddress(ownerForm.solanaAddress) && (
+                  <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Must be a valid Solana (base58) address
+                  </p>
+                )}
+                <p className="text-gray-500 text-xs mt-1">
+                  Only this Phantom wallet can log in to the panel as this owner.
                 </p>
               </div>
 
@@ -1338,7 +1394,7 @@ const Withdrawals = () => {
                 </button>
                 <button
                   onClick={handleSaveOwner}
-                  disabled={saving || !ownerForm.name || !isValidXrplAddress(ownerForm.walletAddress)}
+                  disabled={saving || !ownerFormValid}
                   className="flex-1 btn-primary flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Owner'}

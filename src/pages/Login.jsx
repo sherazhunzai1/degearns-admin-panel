@@ -1,8 +1,8 @@
 import { useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Wallet, Shield, ArrowRight, AlertCircle, QrCode, Loader2, RefreshCw, ExternalLink } from 'lucide-react'
+import { Wallet, Shield, ArrowRight, AlertCircle, Ghost, Loader2, RefreshCw, ExternalLink } from 'lucide-react'
 import {
-  loginWithXaman,
+  loginWithPhantom,
   clearError,
   resetLoginState,
 } from '../store/slices/authSlice'
@@ -17,7 +17,7 @@ const Login = () => {
 
   const handleConnectWallet = useCallback(async () => {
     dispatch(clearError())
-    dispatch(loginWithXaman())
+    dispatch(loginWithPhantom())
   }, [dispatch])
 
   const handleRetry = useCallback(() => {
@@ -50,8 +50,8 @@ const Login = () => {
             <h2 className="text-xl font-semibold text-white mb-2">Admin Login</h2>
             <p className="text-gray-400 text-sm">
               {isConnecting
-                ? 'Please complete authentication in the Xaman popup...'
-                : 'Connect your Xaman wallet to access the admin dashboard'
+                ? 'Approve the connection and sign-in request in Phantom...'
+                : 'Connect your Phantom wallet to access the admin dashboard'
               }
             </p>
           </div>
@@ -78,13 +78,14 @@ const Login = () => {
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary-500/20 flex items-center justify-center animate-pulse">
                 <Loader2 className="w-10 h-10 text-primary-400 animate-spin" />
               </div>
-              <p className="text-white font-medium mb-2">Connecting to Xaman...</p>
+              <p className="text-white font-medium mb-2">Connecting to Phantom...</p>
               <p className="text-gray-400 text-sm mb-6">
-                A popup window should appear. Please scan the QR code or approve the request in your Xaman app.
+                The Phantom extension should open. Approve the connection, then sign the sign-in
+                message to continue.
               </p>
               <div className="flex items-center justify-center gap-2 text-yellow-400 text-sm">
                 <AlertCircle className="w-4 h-4" />
-                <span>Don't see the popup? Check your popup blocker.</span>
+                <span>Don't see the popup? Open the Phantom extension manually.</span>
               </div>
             </div>
           ) : (
@@ -105,9 +106,9 @@ const Login = () => {
                 </div>
                 <div className="flex items-center gap-3 text-gray-300">
                   <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                    <QrCode className="w-4 h-4 text-purple-400" />
+                    <Ghost className="w-4 h-4 text-purple-400" />
                   </div>
-                  <span className="text-sm">Scan QR with Xaman app</span>
+                  <span className="text-sm">Sign in with Solana Phantom wallet</span>
                 </div>
               </div>
 
@@ -123,22 +124,22 @@ const Login = () => {
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   <>
-                    <Wallet className="w-5 h-5" />
-                    Connect Xaman Wallet
+                    <Ghost className="w-5 h-5" />
+                    Connect Phantom Wallet
                     <ArrowRight className="w-5 h-5" />
                   </>
                 )}
               </button>
 
-              {/* Xaman App Link */}
+              {/* Phantom App Link */}
               <div className="mt-4 text-center">
                 <a
-                  href="https://xumm.app"
+                  href="https://phantom.app/download"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-gray-400 text-sm hover:text-primary-400 transition-colors"
                 >
-                  Don't have Xaman?
+                  Don't have Phantom?
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
@@ -154,17 +155,16 @@ const Login = () => {
         {/* Setup Instructions */}
         <div className="mt-6 p-4 rounded-xl bg-dark-400/50 border border-gray-800">
           <p className="text-gray-400 text-xs text-center">
-            <strong className="text-gray-300">Setup:</strong> Get your Xaman API key at{' '}
+            <strong className="text-gray-300">Note:</strong> Install the Phantom wallet from{' '}
             <a
-              href="https://apps.xumm.dev"
+              href="https://phantom.app/download"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary-400 hover:underline"
             >
-              apps.xumm.dev
+              phantom.app
             </a>
-            {' '}and add it to your <code className="bg-dark-300 px-1 rounded">.env</code> file as{' '}
-            <code className="bg-dark-300 px-1 rounded">VITE_XUMM_API_KEY</code>
+            {' '}and connect with one of the registered owner wallets to sign in.
           </p>
         </div>
       </div>
