@@ -132,6 +132,7 @@ const initials = (name) =>
 // or as objects, depending on the backend — normalize both.
 const sigOwnerId = (s) => (typeof s === 'string' ? s : s?.ownerId)
 const sigSignedAt = (s) => (typeof s === 'string' ? null : s?.signedAt)
+const sigOwnerName = (s) => (typeof s === 'string' ? null : s?.owner?.name)
 const txOwnerId = (tx) => (typeof tx === 'string' ? null : tx?.ownerId)
 const txHash = (tx) => (typeof tx === 'string' ? tx : tx?.hash)
 
@@ -329,6 +330,11 @@ const Withdrawals = () => {
 
   // ---- Derived data ----
   const ownerById = (id) => owners.find((o) => o.id === id)
+
+  // The backend may return the initiator as an `initiator` object (with name),
+  // while locally-built withdrawals use an `initiatedBy` owner id. Resolve both.
+  const initiatorOf = (wd) => wd?.initiator || ownerById(wd?.initiatedBy)
+  const initiatorIdOf = (wd) => wd?.initiator?.id || wd?.initiatedBy
 
   const combinedBalance = useMemo(
     () => sourceWallets.reduce((sum, w) => sum + parseFloat(w.balanceBase || 0), 0),
@@ -796,7 +802,7 @@ const Withdrawals = () => {
           </div>
           <div className="divide-y divide-gray-800">
             {myPendingSignatures.map((wd) => {
-              const initiator = ownerById(wd.initiatedBy)
+              const initiator = initiatorOf(wd)
               return (
                 <div key={wd.id} className="p-5 hover:bg-dark-400/30 transition-colors">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -933,8 +939,8 @@ const Withdrawals = () => {
               </thead>
               <tbody className="divide-y divide-gray-800">
                 {paginatedWithdrawals.map((wd) => {
-                  const initiator = ownerById(wd.initiatedBy)
-                  const sigCount = (wd.signatures || []).length
+                  const initiator = initiatorOf(wd)
+                  const sigCount = wd.currentSignatures ?? (wd.signatures || []).length
                   return (
                     <tr key={wd.id} className="hover:bg-dark-400/50 transition-colors">
                       <td className="px-4 py-3">
@@ -1211,10 +1217,10 @@ const Withdrawals = () => {
             <div className="p-5 space-y-4">
               <div className="p-4 rounded-lg bg-dark-400 border border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
-                  <OwnerAvatar owner={ownerById(selectedWithdrawal.initiatedBy)} size="lg" />
+                  <OwnerAvatar owner={initiatorOf(selectedWithdrawal)} size="lg" />
                   <div>
                     <p className="text-white font-medium">
-                      {ownerById(selectedWithdrawal.initiatedBy)?.name}
+                      {initiatorOf(selectedWithdrawal)?.name}
                     </p>
                     <p className="text-xs text-gray-400">
                       Initiated {formatDate(selectedWithdrawal.createdAt)}
@@ -1319,10 +1325,10 @@ const Withdrawals = () => {
             <div className="p-5 space-y-4">
               <div className="p-3 rounded-lg bg-dark-400 border border-gray-700">
                 <div className="flex items-center gap-3 mb-2">
-                  <OwnerAvatar owner={ownerById(selectedWithdrawal.initiatedBy)} />
+                  <OwnerAvatar owner={initiatorOf(selectedWithdrawal)} />
                   <div>
                     <p className="text-white font-medium">
-                      {ownerById(selectedWithdrawal.initiatedBy)?.name}
+                      {initiatorOf(selectedWithdrawal)?.name}
                     </p>
                     <p className="text-gray-500 text-sm">{fmtUnit(selectedWithdrawal.totalAmount)} total</p>
                   </div>
@@ -1620,18 +1626,20 @@ const Withdrawals = () => {
                     <div className="w-2 h-2 rounded-full bg-primary-400 mt-1.5 flex-shrink-0" />
                     <div>
                       <p className="text-white text-sm">
-                        Initiated by {ownerById(selectedWithdrawal.initiatedBy)?.name}
+                        Initiated by {initiatorOf(selectedWithdrawal)?.name}
                       </p>
                       <p className="text-gray-500 text-xs">{formatDate(selectedWithdrawal.createdAt)}</p>
                     </div>
                   </div>
                   {(selectedWithdrawal.signatures || [])
-                    .filter((s) => sigOwnerId(s) !== selectedWithdrawal.initiatedBy)
+                    .filter((s) => sigOwnerId(s) !== initiatorIdOf(selectedWithdrawal))
                     .map((s) => (
                       <div key={sigOwnerId(s)} className="flex items-start gap-3">
                         <div className="w-2 h-2 rounded-full bg-green-400 mt-1.5 flex-shrink-0" />
                         <div>
-                          <p className="text-white text-sm">Signed by {ownerById(sigOwnerId(s))?.name}</p>
+                          <p className="text-white text-sm">
+                            Signed by {sigOwnerName(s) || ownerById(sigOwnerId(s))?.name}
+                          </p>
                           <p className="text-gray-500 text-xs">{formatDate(sigSignedAt(s))}</p>
                         </div>
                       </div>
