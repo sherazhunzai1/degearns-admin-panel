@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
@@ -10,6 +10,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  ChevronDown,
   Wallet,
   Layers,
   FolderOpen,
@@ -26,7 +27,21 @@ const Layout = () => {
   const { user } = useSelector((state) => state.auth)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef(null)
   const location = useLocation()
+
+  // Close the header wallet menu when clicking outside of it
+  useEffect(() => {
+    if (!userMenuOpen) return
+    const handleClickOutside = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [userMenuOpen])
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -48,8 +63,14 @@ const Layout = () => {
   }
 
   const handleLogout = () => {
+    setUserMenuOpen(false)
     dispatch(logout())
   }
+
+  const walletLabel = user?.chain === 'xrpl' ? 'Xaman' : 'Phantom'
+
+  const formatAddress = (address) =>
+    address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''
 
   return (
     <div className="min-h-screen bg-dark-500 flex">
@@ -241,10 +262,61 @@ const Layout = () => {
               </button>
               <h1 className="text-xl lg:text-2xl font-bold text-white">{getPageTitle()}</h1>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-300">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                 <span className="text-sm text-gray-400">Connected</span>
+              </div>
+
+              {/* Wallet / disconnect menu */}
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setUserMenuOpen((open) => !open)}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-dark-300 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                    <Wallet className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="hidden md:block text-left">
+                    <p className="text-sm font-medium text-white leading-tight">{user?.username || 'Owner'}</p>
+                    <p className="text-xs text-gray-400 leading-tight">
+                      {walletLabel} · {formatAddress(user?.address)}
+                    </p>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {userMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-64 rounded-xl bg-dark-300 border border-gray-800 shadow-xl z-50 overflow-hidden animate-fade-in">
+                    <div className="p-4 border-b border-gray-800">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                          <Wallet className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-white truncate">{user?.username || 'Owner'}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-primary-500/20 text-primary-400 border border-primary-500/30">
+                              {walletLabel}
+                            </span>
+                            <code className="text-xs text-gray-400 font-mono truncate">
+                              {formatAddress(user?.address)}
+                            </code>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-red-400 hover:bg-red-500/10 transition-colors text-sm font-medium"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Disconnect wallet
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
