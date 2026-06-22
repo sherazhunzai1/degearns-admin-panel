@@ -653,7 +653,7 @@ const Withdrawals = () => {
             <div>
               <h3 className="text-lg font-semibold text-white">Authorized Owners</h3>
               <p className="text-sm text-gray-400">
-                Three owners must sign every withdrawal. Wallet addresses are stored in the database.
+                Three owners must sign every withdrawal.
               </p>
             </div>
           </div>
