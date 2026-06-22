@@ -750,36 +750,49 @@ export const withdrawalsAPI = {
   // ============ Source Wallets ============
 
   // Get the three platform revenue source wallets (minting, treasury,
-  // subscriptions) with their current balances. The backend decides which
-  // stored wallet maps to each source type.
-  getSourceWallets: () => api.get('/admin/withdrawals/source-wallets'),
+  // subscriptions) with their current balances, for the given chain
+  // ('xrpl' or 'solana'). The backend decides which stored wallet maps to
+  // each source type.
+  getSourceWallets: (chain = 'xrpl') =>
+    chain === 'solana'
+      ? api.get('/admin/withdrawals/solana/source-wallets')
+      : api.get('/admin/withdrawals/source-wallets'),
 
   // ============ Withdrawal Requests ============
 
-  // Get all multi-sig withdrawal requests
+  // Get all multi-sig withdrawal requests for the given chain
   getWithdrawals: (params = {}) => {
-    const { page = 1, limit = 20, status } = params
-    return api.get('/admin/withdrawals', { params: { page, limit, status } })
+    const { page = 1, limit = 20, status, chain = 'xrpl' } = params
+    const base = chain === 'solana' ? '/admin/withdrawals/solana' : '/admin/withdrawals'
+    return api.get(base, { params: { page, limit, status } })
   },
 
-  // Get withdrawal statistics
-  getStats: () => api.get('/admin/withdrawals/stats'),
+  // Get withdrawal statistics for the given chain
+  getStats: (chain = 'xrpl') =>
+    chain === 'solana'
+      ? api.get('/admin/withdrawals/solana/stats')
+      : api.get('/admin/withdrawals/stats'),
 
   // Initiate a new withdrawal request. The amount is split equally between
   // the three owners; the initiating owner's signature is recorded.
   createWithdrawal: (data) => {
-    const { totalAmount, reason, initiatedBy } = data
-    return api.post('/admin/withdrawals', { totalAmount, reason, initiatedBy })
+    const { totalAmount, reason, initiatedBy, chain = 'xrpl' } = data
+    const base = chain === 'solana' ? '/admin/withdrawals/solana' : '/admin/withdrawals'
+    return api.post(base, { totalAmount, reason, initiatedBy })
   },
 
   // Add an owner's signature to a pending withdrawal. When the third
   // signature is added the backend executes the equal split transfer.
-  signWithdrawal: (withdrawalId, ownerId) =>
-    api.post(`/admin/withdrawals/${withdrawalId}/sign`, { ownerId }),
+  signWithdrawal: (withdrawalId, ownerId, chain = 'xrpl') => {
+    const base = chain === 'solana' ? '/admin/withdrawals/solana' : '/admin/withdrawals'
+    return api.post(`${base}/${withdrawalId}/sign`, { ownerId })
+  },
 
   // Reject a pending withdrawal request
-  rejectWithdrawal: (withdrawalId, ownerId, reason) =>
-    api.post(`/admin/withdrawals/${withdrawalId}/reject`, { ownerId, reason }),
+  rejectWithdrawal: (withdrawalId, ownerId, reason, chain = 'xrpl') => {
+    const base = chain === 'solana' ? '/admin/withdrawals/solana' : '/admin/withdrawals'
+    return api.post(`${base}/${withdrawalId}/reject`, { ownerId, reason })
+  },
 }
 
 // ============================================

@@ -3,76 +3,54 @@ import { withdrawalsAPI } from '../../services/api'
 import { DEFAULT_OWNERS, OWNERS_STORAGE_KEY } from '../../services/owners'
 
 // ============================================
-// Multi-Sig Owner Withdrawals Slice
+// Multi-Sig Owner Withdrawals Slice (chain-aware)
 // ============================================
-// Drives the 3-of-3 multi-signature owner withdrawal page.
+// Drives the 3-of-3 multi-signature owner withdrawal page for BOTH chains:
+//   - 'xrpl'   → Xaman login, XRPL owner addresses, amounts in drops (10^6)
+//   - 'solana' → Phantom login, Solana owner addresses, amounts in lamports (10^9)
 //
-// Funds are withdrawn from the three platform revenue wallets
-// (minting, treasury, subscriptions) and split EQUALLY between the three
-// owner wallets once all three owners have signed.
+// Funds are withdrawn from the three platform revenue wallets (minting,
+// treasury, subscriptions) on the active chain and split EQUALLY between the
+// three owner wallets once all three owners have signed.
 //
-// The slice talks to the real backend (`withdrawalsAPI`) but gracefully
-// falls back to browser localStorage when those endpoints are not yet
-// deployed, so the page is fully functional today. See
-// WITHDRAWALS_BACKEND_API_PROMPT.md for the backend contract.
+// API first (`withdrawalsAPI`), with graceful localStorage fallback so the
+// page works before the backend endpoints are deployed. See
+// WITHDRAWALS_BACKEND_API_PROMPT.md (XRPL) and
+// WITHDRAWALS_SOLANA_BACKEND_API_PROMPT.md (Solana) for the backend contracts.
 
 const REQUIRED_SIGNATURES = 3
 
-// localStorage keys (fallback persistence). The owners key is shared with the
-// auth layer via services/owners.js so login and withdrawals stay in sync.
-const OWNERS_KEY = OWNERS_STORAGE_KEY
-const WITHDRAWALS_KEY = 'degearns_withdrawals'
+// Per-chain owner address field used for the equal-split destinations.
+const OWNER_ADDRESS_FIELD = { xrpl: 'walletAddress', solana: 'solanaAddress' }
+
+// localStorage keys (fallback persistence). Owners are shared with the auth
+// layer; withdrawals are kept per chain so the two ledgers never mix.
+const WITHDRAWALS_KEY = (chain) => `degearns_withdrawals_${chain}`
 
 // The three platform revenue wallets that fund withdrawals.
 export const SOURCE_WALLET_TYPES = [
-  {
-    type: 'minting',
-    label: 'Platform Minting Wallet',
-    description: 'Collects revenue from NFT minting',
-  },
-  {
-    type: 'treasury',
-    label: 'Treasury Wallet',
-    description: 'Collects platform treasury revenue',
-  },
-  {
-    type: 'subscriptions',
-    label: 'Subscriptions Wallet',
-    description: 'Collects subscription revenue',
-  },
+  { type: 'minting', label: 'Platform Minting Wallet', description: 'Collects revenue from NFT minting' },
+  { type: 'treasury', label: 'Treasury Wallet', description: 'Collects platform treasury revenue' },
+  { type: 'subscriptions', label: 'Subscriptions Wallet', description: 'Collects subscription revenue' },
 ]
 
 // ---------------------------------------------
-// Default / seed data (used until the backend is wired up)
-// DEFAULT_OWNERS lives in services/owners.js so the auth layer and the
-// withdrawals page share one source of truth.
+// Default / seed data (used until the backend is wired up).
+// `balanceBase` is in the chain's base unit (drops for XRPL, lamports for Solana).
+// DEFAULT_OWNERS lives in services/owners.js (shared with the auth layer).
 // ---------------------------------------------
-const DEFAULT_SOURCE_WALLETS = [
-  {
-    type: 'minting',
-    label: 'Platform Minting Wallet',
-    description: 'Collects revenue from NFT minting',
-    walletAddress: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
-    balanceDrops: '1250000000000',
-    configured: true,
-  },
-  {
-    type: 'treasury',
-    label: 'Treasury Wallet',
-    description: 'Collects platform treasury revenue',
-    walletAddress: 'rsXwGQP9YQ9Fb3kL2mNvCpXqYtZ8KdR5wT',
-    balanceDrops: '820000000000',
-    configured: true,
-  },
-  {
-    type: 'subscriptions',
-    label: 'Subscriptions Wallet',
-    description: 'Collects subscription revenue',
-    walletAddress: 'rJ4mK2nP8qVxW7sT3yBhLcXdZ9eR6uA2gN',
-    balanceDrops: '380000000000',
-    configured: true,
-  },
-]
+const DEFAULT_SOURCE_WALLETS_BY_CHAIN = {
+  xrpl: [
+    { type: 'minting', label: 'Platform Minting Wallet', description: 'Collects revenue from NFT minting', walletAddress: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh', balanceBase: '1250000000000', configured: true },
+    { type: 'treasury', label: 'Treasury Wallet', description: 'Collects platform treasury revenue', walletAddress: 'rsXwGQP9YQ9Fb3kL2mNvCpXqYtZ8KdR5wT', balanceBase: '820000000000', configured: true },
+    { type: 'subscriptions', label: 'Subscriptions Wallet', description: 'Collects subscription revenue', walletAddress: 'rJ4mK2nP8qVxW7sT3yBhLcXdZ9eR6uA2gN', balanceBase: '380000000000', configured: true },
+  ],
+  solana: [
+    { type: 'minting', label: 'Platform Minting Wallet', description: 'Collects revenue from NFT minting', walletAddress: '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1', balanceBase: '1200000000000', configured: true },
+    { type: 'treasury', label: 'Treasury Wallet', description: 'Collects platform treasury revenue', walletAddress: '8FE27ioQh3T7o22QsYVT5Re8NnHFqmFNbdqwiF3ywuZQ', balanceBase: '850000000000', configured: true },
+    { type: 'subscriptions', label: 'Subscriptions Wallet', description: 'Collects subscription revenue', walletAddress: '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E', balanceBase: '430000000000', configured: true },
+  ],
+}
 
 // ---------------------------------------------
 // localStorage helpers
@@ -97,25 +75,27 @@ const saveToStorage = (key, value) => {
 // ---------------------------------------------
 // Withdrawal builder helpers
 // ---------------------------------------------
-const splitEqually = (totalDrops, owners) => {
-  const total = BigInt(totalDrops)
+const splitEqually = (totalBase, owners, addressField) => {
+  const total = BigInt(totalBase)
   const count = BigInt(owners.length || 1)
   const base = total / count
   const remainder = total - base * count // distribute any rounding remainder to the first owners
   return owners.map((owner, index) => ({
     ownerId: owner.id,
     name: owner.name,
-    walletAddress: owner.walletAddress,
+    walletAddress: owner[addressField],
     amount: (base + (BigInt(index) < remainder ? 1n : 0n)).toString(),
   }))
 }
 
-const buildWithdrawal = ({ totalAmount, reason, initiatedBy, owners, sourceWallets }) => {
-  const splits = splitEqually(totalAmount, owners)
+const buildWithdrawal = ({ chain, totalAmount, reason, initiatedBy, owners, sourceWallets }) => {
+  const addressField = OWNER_ADDRESS_FIELD[chain] || 'walletAddress'
+  const splits = splitEqually(totalAmount, owners, addressField)
   const perSource = (BigInt(totalAmount) / BigInt(sourceWallets.length || 1)).toString()
   const now = new Date().toISOString()
   return {
-    id: `wd-${Date.now()}`,
+    id: `wd-${chain}-${Date.now()}`,
+    chain,
     totalAmount: String(totalAmount),
     perOwnerAmount: splits[0]?.amount || '0',
     reason,
@@ -139,8 +119,25 @@ const buildWithdrawal = ({ totalAmount, reason, initiatedBy, owners, sourceWalle
   }
 }
 
-const randomTxHash = () =>
-  Array.from({ length: 64 }, () => '0123456789ABCDEF'[Math.floor(Math.random() * 16)]).join('')
+const randomTxHash = (chain) => {
+  if (chain === 'solana') {
+    const b58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    return Array.from({ length: 88 }, () => b58[Math.floor(Math.random() * b58.length)]).join('')
+  }
+  return Array.from({ length: 64 }, () => '0123456789ABCDEF'[Math.floor(Math.random() * 16)]).join('')
+}
+
+const normalizeSourceWallets = (chain, wallets) =>
+  SOURCE_WALLET_TYPES.map((src) => {
+    const match = wallets.find((w) => w.type === src.type)
+    if (!match) return { ...src, walletAddress: null, balanceBase: '0', configured: false }
+    return {
+      ...src,
+      ...match,
+      balanceBase: match.balanceBase ?? match.balanceDrops ?? match.balanceLamports ?? '0',
+      configured: Boolean(match.walletAddress),
+    }
+  })
 
 // ============================================
 // Async Thunks (API first, localStorage fallback)
@@ -151,94 +148,87 @@ export const fetchOwners = createAsyncThunk('withdrawals/fetchOwners', async () 
     const response = await withdrawalsAPI.getOwners()
     const owners = response.data?.data?.owners || response.data?.data || []
     if (Array.isArray(owners) && owners.length > 0) {
-      saveToStorage(OWNERS_KEY, owners)
+      saveToStorage(OWNERS_STORAGE_KEY, owners)
       return owners
     }
-    return loadFromStorage(OWNERS_KEY, DEFAULT_OWNERS)
+    return loadFromStorage(OWNERS_STORAGE_KEY, DEFAULT_OWNERS)
   } catch {
-    return loadFromStorage(OWNERS_KEY, DEFAULT_OWNERS)
+    return loadFromStorage(OWNERS_STORAGE_KEY, DEFAULT_OWNERS)
   }
 })
 
-export const saveOwner = createAsyncThunk(
-  'withdrawals/saveOwner',
-  async (owner, { getState }) => {
+export const saveOwner = createAsyncThunk('withdrawals/saveOwner', async (owner, { getState }) => {
+  try {
+    const response = await withdrawalsAPI.saveOwner(owner)
+    return response.data?.data?.owner || response.data?.data || owner
+  } catch {
+    const current = getState().withdrawals.owners
+    const id = owner.id || `owner-${Date.now()}`
+    const next = owner.id
+      ? current.map((o) => (o.id === owner.id ? { ...o, ...owner } : o))
+      : [...current, { ...owner, id }]
+    saveToStorage(OWNERS_STORAGE_KEY, next)
+    return { ...owner, id }
+  }
+})
+
+export const deleteOwner = createAsyncThunk('withdrawals/deleteOwner', async (ownerId, { getState }) => {
+  try {
+    await withdrawalsAPI.deleteOwner(ownerId)
+  } catch {
+    /* fall through to local removal */
+  }
+  const next = getState().withdrawals.owners.filter((o) => o.id !== ownerId)
+  saveToStorage(OWNERS_STORAGE_KEY, next)
+  return ownerId
+})
+
+export const fetchSourceWallets = createAsyncThunk(
+  'withdrawals/fetchSourceWallets',
+  async (chain = 'xrpl') => {
     try {
-      const response = await withdrawalsAPI.saveOwner(owner)
-      return response.data?.data?.owner || response.data?.data || owner
+      const response = await withdrawalsAPI.getSourceWallets(chain)
+      const wallets = response.data?.data?.wallets || response.data?.data || []
+      if (Array.isArray(wallets) && wallets.length > 0) {
+        return normalizeSourceWallets(chain, wallets)
+      }
+      return DEFAULT_SOURCE_WALLETS_BY_CHAIN[chain] || DEFAULT_SOURCE_WALLETS_BY_CHAIN.xrpl
     } catch {
-      // Fallback: upsert into localStorage
-      const current = getState().withdrawals.owners
-      const id = owner.id || `owner-${Date.now()}`
-      const next = owner.id
-        ? current.map((o) => (o.id === owner.id ? { ...o, ...owner } : o))
-        : [...current, { ...owner, id }]
-      saveToStorage(OWNERS_KEY, next)
-      return { ...owner, id }
+      return DEFAULT_SOURCE_WALLETS_BY_CHAIN[chain] || DEFAULT_SOURCE_WALLETS_BY_CHAIN.xrpl
     }
   }
 )
 
-export const deleteOwner = createAsyncThunk(
-  'withdrawals/deleteOwner',
-  async (ownerId, { getState }) => {
+export const fetchWithdrawals = createAsyncThunk(
+  'withdrawals/fetchWithdrawals',
+  async (chain = 'xrpl') => {
     try {
-      await withdrawalsAPI.deleteOwner(ownerId)
+      const response = await withdrawalsAPI.getWithdrawals({ chain })
+      const list = response.data?.data?.withdrawals || response.data?.data || []
+      if (Array.isArray(list) && list.length > 0) {
+        saveToStorage(WITHDRAWALS_KEY(chain), list)
+        return list
+      }
+      return loadFromStorage(WITHDRAWALS_KEY(chain), [])
     } catch {
-      /* fall through to local removal */
+      return loadFromStorage(WITHDRAWALS_KEY(chain), [])
     }
-    const next = getState().withdrawals.owners.filter((o) => o.id !== ownerId)
-    saveToStorage(OWNERS_KEY, next)
-    return ownerId
   }
 )
-
-export const fetchSourceWallets = createAsyncThunk('withdrawals/fetchSourceWallets', async () => {
-  try {
-    const response = await withdrawalsAPI.getSourceWallets()
-    const wallets = response.data?.data?.wallets || response.data?.data || []
-    if (Array.isArray(wallets) && wallets.length > 0) {
-      // Ensure all three source types are represented
-      return SOURCE_WALLET_TYPES.map((src) => {
-        const match = wallets.find((w) => w.type === src.type)
-        return match
-          ? { ...src, ...match, configured: Boolean(match.walletAddress) }
-          : { ...src, walletAddress: null, balanceDrops: '0', configured: false }
-      })
-    }
-    return DEFAULT_SOURCE_WALLETS
-  } catch {
-    return DEFAULT_SOURCE_WALLETS
-  }
-})
-
-export const fetchWithdrawals = createAsyncThunk('withdrawals/fetchWithdrawals', async () => {
-  try {
-    const response = await withdrawalsAPI.getWithdrawals()
-    const list = response.data?.data?.withdrawals || response.data?.data || []
-    if (Array.isArray(list) && list.length > 0) {
-      saveToStorage(WITHDRAWALS_KEY, list)
-      return list
-    }
-    return loadFromStorage(WITHDRAWALS_KEY, [])
-  } catch {
-    return loadFromStorage(WITHDRAWALS_KEY, [])
-  }
-})
 
 export const createWithdrawal = createAsyncThunk(
   'withdrawals/createWithdrawal',
-  async ({ totalAmount, reason, initiatedBy }, { getState }) => {
+  async ({ chain = 'xrpl', totalAmount, reason, initiatedBy }, { getState }) => {
     const { owners, sourceWallets } = getState().withdrawals
     try {
-      const response = await withdrawalsAPI.createWithdrawal({ totalAmount, reason, initiatedBy })
+      const response = await withdrawalsAPI.createWithdrawal({ chain, totalAmount, reason, initiatedBy })
       const created = response.data?.data?.withdrawal || response.data?.data
       if (created) return created
       throw new Error('empty response')
     } catch {
-      const created = buildWithdrawal({ totalAmount, reason, initiatedBy, owners, sourceWallets })
+      const created = buildWithdrawal({ chain, totalAmount, reason, initiatedBy, owners, sourceWallets })
       const next = [created, ...getState().withdrawals.withdrawals]
-      saveToStorage(WITHDRAWALS_KEY, next)
+      saveToStorage(WITHDRAWALS_KEY(chain), next)
       return created
     }
   }
@@ -246,14 +236,13 @@ export const createWithdrawal = createAsyncThunk(
 
 export const signWithdrawal = createAsyncThunk(
   'withdrawals/signWithdrawal',
-  async ({ withdrawalId, ownerId }, { getState }) => {
+  async ({ chain = 'xrpl', withdrawalId, ownerId }, { getState }) => {
     try {
-      const response = await withdrawalsAPI.signWithdrawal(withdrawalId, ownerId)
+      const response = await withdrawalsAPI.signWithdrawal(withdrawalId, ownerId, chain)
       const updated = response.data?.data?.withdrawal || response.data?.data
       if (updated) return updated
       throw new Error('empty response')
     } catch {
-      // Local fallback: append signature, complete on the third one
       const current = getState().withdrawals.withdrawals.find((w) => w.id === withdrawalId)
       if (!current) throw new Error('Withdrawal not found')
       const alreadySigned = current.signatures.some((s) => s.ownerId === ownerId)
@@ -267,13 +256,11 @@ export const signWithdrawal = createAsyncThunk(
         status: isComplete ? 'completed' : 'pending_signatures',
         completedAt: isComplete ? new Date().toISOString() : null,
         transactionHashes: isComplete
-          ? (current.splits || []).map((s) => ({ ownerId: s.ownerId, hash: randomTxHash() }))
+          ? (current.splits || []).map((s) => ({ ownerId: s.ownerId, hash: randomTxHash(current.chain || chain) }))
           : null,
       }
-      const next = getState().withdrawals.withdrawals.map((w) =>
-        w.id === withdrawalId ? updated : w
-      )
-      saveToStorage(WITHDRAWALS_KEY, next)
+      const next = getState().withdrawals.withdrawals.map((w) => (w.id === withdrawalId ? updated : w))
+      saveToStorage(WITHDRAWALS_KEY(current.chain || chain), next)
       return updated
     }
   }
@@ -281,9 +268,9 @@ export const signWithdrawal = createAsyncThunk(
 
 export const rejectWithdrawal = createAsyncThunk(
   'withdrawals/rejectWithdrawal',
-  async ({ withdrawalId, ownerId, reason }, { getState }) => {
+  async ({ chain = 'xrpl', withdrawalId, ownerId, reason }, { getState }) => {
     try {
-      const response = await withdrawalsAPI.rejectWithdrawal(withdrawalId, ownerId, reason)
+      const response = await withdrawalsAPI.rejectWithdrawal(withdrawalId, ownerId, reason, chain)
       const updated = response.data?.data?.withdrawal || response.data?.data
       if (updated) return updated
       throw new Error('empty response')
@@ -297,10 +284,8 @@ export const rejectWithdrawal = createAsyncThunk(
         rejectedBy: ownerId,
         rejectionReason: reason,
       }
-      const next = getState().withdrawals.withdrawals.map((w) =>
-        w.id === withdrawalId ? updated : w
-      )
-      saveToStorage(WITHDRAWALS_KEY, next)
+      const next = getState().withdrawals.withdrawals.map((w) => (w.id === withdrawalId ? updated : w))
+      saveToStorage(WITHDRAWALS_KEY(current.chain || chain), next)
       return updated
     }
   }

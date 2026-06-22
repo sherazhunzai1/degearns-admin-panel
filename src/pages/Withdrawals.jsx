@@ -55,19 +55,54 @@ const SOURCE_ICONS = {
 // Helpers
 // ============================================
 
-const dropsToXrp = (drops) => {
-  if (!drops) return '0.00'
-  return (parseFloat(drops) / 1000000).toLocaleString('en-US', {
+const isValidXrplAddress = (address) =>
+  typeof address === 'string' && /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(address.trim())
+
+const isValidSolanaAddress = (address) =>
+  typeof address === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address.trim())
+
+// Per-chain presentation + unit configuration
+const CHAIN_CONFIG = {
+  xrpl: {
+    chainLabel: 'XRPL',
+    walletLabel: 'Xaman',
+    unit: 'XRP',
+    decimals: 6,
+    addressField: 'walletAddress',
+    addressLabel: 'XRPL',
+    explorerName: 'XRPL Explorer',
+    isValidAddress: isValidXrplAddress,
+  },
+  solana: {
+    chainLabel: 'Solana',
+    walletLabel: 'Phantom',
+    unit: 'SOL',
+    decimals: 9,
+    addressField: 'solanaAddress',
+    addressLabel: 'Solana',
+    explorerName: 'Solscan',
+    isValidAddress: isValidSolanaAddress,
+  },
+}
+
+// Convert a base-unit string (drops / lamports) to a human display string
+const formatBaseAmount = (base, decimals) => {
+  if (!base) return '0.00'
+  return (parseFloat(base) / 10 ** decimals).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
 }
 
-const xrpToDrops = (xrp) => {
-  const n = parseFloat(xrp)
+// Convert a human display amount to base units (drops / lamports)
+const toBaseUnits = (display, decimals) => {
+  const n = parseFloat(display)
   if (isNaN(n)) return '0'
-  return Math.round(n * 1000000).toString()
+  return Math.round(n * 10 ** decimals).toString()
 }
+
+const formatNumber = (n) =>
+  Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const formatDate = (dateString) => {
   if (!dateString) return '-'
@@ -84,12 +119,6 @@ const formatAddress = (address) => {
   if (!address) return '-'
   return `${address.slice(0, 8)}...${address.slice(-6)}`
 }
-
-const isValidXrplAddress = (address) =>
-  typeof address === 'string' && /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(address.trim())
-
-const isValidSolanaAddress = (address) =>
-  typeof address === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address.trim())
 
 const initials = (name) =>
   (name || '?')
@@ -237,17 +266,24 @@ const Withdrawals = () => {
     successMessage,
   } = useSelector((state) => state.withdrawals)
 
-  // The acting owner is the wallet currently connected via Phantom. Only this
-  // owner can initiate, sign or reject — and only for themselves. Login is by
-  // Solana address, so match on owner id first, then by address.
+  // The active chain is determined by the wallet the owner logged in with:
+  // Phantom → Solana, Xaman → XRPL. The whole page (owner addresses, source
+  // wallets, amounts/units) follows this chain.
+  const chain = user?.chain === 'solana' ? 'solana' : 'xrpl'
+  const cfg = CHAIN_CONFIG[chain]
+  const unit = cfg.unit
+  const fmt = (base) => formatBaseAmount(base, cfg.decimals)
+  const fmtUnit = (base) => `${formatBaseAmount(base, cfg.decimals)} ${cfg.unit}`
+  const toBase = (display) => toBaseUnits(display, cfg.decimals)
+  const ownerAddr = (owner) => owner?.[cfg.addressField]
+
+  // The acting owner is the wallet currently connected. Only this owner can
+  // initiate, sign or reject — and only for themselves.
   const currentOwner =
     owners.find((o) => o.id === user?.ownerId) ||
     findOwnerBySolanaAddress(user?.address, owners) ||
     findOwnerByAddress(user?.address, owners) ||
     null
-
-  // Which wallet the connected owner signed in with
-  const walletLabel = user?.chain === 'xrpl' ? 'Xaman' : 'Phantom'
 
   // Modal states
   const [showInitiateModal, setShowInitiateModal] = useState(false)
@@ -269,12 +305,12 @@ const Withdrawals = () => {
   const [currentPage, setCurrentPage] = useState(1)
   const [copiedKey, setCopiedKey] = useState(null)
 
-  // Load data
+  // Load data (re-fetch chain-specific data when the active chain changes)
   useEffect(() => {
     dispatch(fetchOwners())
-    dispatch(fetchSourceWallets())
-    dispatch(fetchWithdrawals())
-  }, [dispatch])
+    dispatch(fetchSourceWallets(chain))
+    dispatch(fetchWithdrawals(chain))
+  }, [dispatch, chain])
 
   // Auto-dismiss success messages
   useEffect(() => {
@@ -288,7 +324,7 @@ const Withdrawals = () => {
   const ownerById = (id) => owners.find((o) => o.id === id)
 
   const combinedBalance = useMemo(
-    () => sourceWallets.reduce((sum, w) => sum + parseFloat(w.balanceDrops || 0), 0),
+    () => sourceWallets.reduce((sum, w) => sum + parseFloat(w.balanceBase || 0), 0),
     [sourceWallets]
   )
 
@@ -306,8 +342,8 @@ const Withdrawals = () => {
     (w) => w.status === 'pending_signatures' && currentOwner && !hasSigned(w, currentOwner.id)
   )
 
-  const ownersConfigured = owners.length >= 3 && owners.every((o) => isValidXrplAddress(o.walletAddress))
-  const sourcesConfigured = sourceWallets.length > 0 && sourceWallets.every((w) => w.configured)
+  const ownersConfigured =
+    owners.length >= 3 && owners.every((o) => cfg.isValidAddress(ownerAddr(o)))
 
   // Filtered withdrawals
   const filteredWithdrawals = useMemo(() => {
@@ -342,14 +378,14 @@ const Withdrawals = () => {
     setTimeout(() => setCopiedKey(null), 2000)
   }
 
-  // Equal-split preview for the initiate form
-  const perOwnerXrp = useMemo(() => {
+  // Equal-split preview for the initiate form (display units)
+  const perOwnerDisplay = useMemo(() => {
     const amount = parseFloat(initiateForm.amount)
     if (isNaN(amount) || amount <= 0 || owners.length === 0) return 0
     return amount / owners.length
   }, [initiateForm.amount, owners.length])
 
-  const perSourceXrp = useMemo(() => {
+  const perSourceDisplay = useMemo(() => {
     const amount = parseFloat(initiateForm.amount)
     if (isNaN(amount) || amount <= 0 || sourceWallets.length === 0) return 0
     return amount / sourceWallets.length
@@ -358,7 +394,7 @@ const Withdrawals = () => {
   const amountExceedsBalance =
     parseFloat(initiateForm.amount) > 0 &&
     combinedBalance > 0 &&
-    parseFloat(xrpToDrops(initiateForm.amount)) > combinedBalance
+    parseFloat(toBase(initiateForm.amount)) > combinedBalance
 
   // ---- Handlers ----
   const handleInitiateSubmit = async (e) => {
@@ -366,7 +402,8 @@ const Withdrawals = () => {
     if (!currentOwner || !initiateForm.amount || !initiateForm.reason) return
     await dispatch(
       createWithdrawal({
-        totalAmount: xrpToDrops(initiateForm.amount),
+        chain,
+        totalAmount: toBase(initiateForm.amount),
         reason: initiateForm.reason,
         initiatedBy: currentOwner.id,
       })
@@ -377,7 +414,7 @@ const Withdrawals = () => {
 
   const handleSign = async () => {
     if (!selectedWithdrawal || !currentOwner) return
-    await dispatch(signWithdrawal({ withdrawalId: selectedWithdrawal.id, ownerId: currentOwner.id }))
+    await dispatch(signWithdrawal({ chain, withdrawalId: selectedWithdrawal.id, ownerId: currentOwner.id }))
     setShowSignModal(false)
     setSelectedWithdrawal(null)
   }
@@ -386,6 +423,7 @@ const Withdrawals = () => {
     if (!selectedWithdrawal || !currentOwner || !rejectionReason) return
     await dispatch(
       rejectWithdrawal({
+        chain,
         withdrawalId: selectedWithdrawal.id,
         ownerId: currentOwner.id,
         reason: rejectionReason,
@@ -459,11 +497,16 @@ const Withdrawals = () => {
             <div className="flex items-center gap-3">
               <OwnerAvatar owner={currentOwner} size="lg" />
               <div>
-                <p className="text-sm text-gray-400">Connected {walletLabel} wallet · authorized owner</p>
+                <p className="text-sm text-gray-400">
+                  Connected {cfg.walletLabel} wallet · {cfg.chainLabel} withdrawals
+                </p>
                 <p className="text-white font-medium">{currentOwner.name}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <span className="px-2 py-1 rounded-full bg-primary-500/20 text-primary-300 border border-primary-500/30 text-xs font-medium">
+                {cfg.chainLabel}
+              </span>
               <code className="text-xs text-gray-300 bg-dark-400 px-2 py-1.5 rounded font-mono">
                 {formatAddress(user?.address)}
               </code>
@@ -492,10 +535,10 @@ const Withdrawals = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
           title="Total Withdrawn"
-          value={`${dropsToXrp(totalWithdrawn.toString())} XRP`}
+          value={fmtUnit(totalWithdrawn.toString())}
           icon={ArrowUpRight}
           color="bg-gradient-to-br from-primary-500 to-primary-600"
-          subValue={`Available: ${dropsToXrp(combinedBalance.toString())} XRP`}
+          subValue={`Available: ${fmtUnit(combinedBalance.toString())}`}
         />
         <StatsCard
           title="Awaiting Signatures"
@@ -530,7 +573,9 @@ const Withdrawals = () => {
               <Wallet className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">Revenue Source Wallets</h3>
+              <h3 className="text-lg font-semibold text-white">
+                {cfg.chainLabel} Revenue Source Wallets
+              </h3>
               <p className="text-sm text-gray-400">
                 Funds are pulled equally from these three platform wallets
               </p>
@@ -538,7 +583,7 @@ const Withdrawals = () => {
           </div>
           <div className="text-right hidden sm:block">
             <p className="text-xs text-gray-400">Combined Available</p>
-            <p className="text-xl font-bold text-white">{dropsToXrp(combinedBalance.toString())} XRP</p>
+            <p className="text-xl font-bold text-white">{fmtUnit(combinedBalance.toString())}</p>
           </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-5">
@@ -573,14 +618,14 @@ const Withdrawals = () => {
                       </button>
                     </div>
                     <p className="text-lg font-bold text-white">
-                      {dropsToXrp(wallet.balanceDrops)}{' '}
-                      <span className="text-xs text-gray-400 font-normal">XRP</span>
+                      {fmt(wallet.balanceBase)}{' '}
+                      <span className="text-xs text-gray-400 font-normal">{unit}</span>
                     </p>
                   </>
                 ) : (
                   <div className="flex items-center gap-2 text-yellow-400 text-xs">
                     <AlertCircle className="w-4 h-4" />
-                    Not configured — set this wallet in Settings → Wallets
+                    Not configured — set this {cfg.chainLabel} wallet in the backend
                   </div>
                 )}
               </div>
@@ -624,7 +669,7 @@ const Withdrawals = () => {
                 </button>
               )
             }
-            const valid = isValidXrplAddress(owner.walletAddress)
+            const activeValid = cfg.isValidAddress(ownerAddr(owner))
             return (
               <div
                 key={owner.id}
@@ -655,18 +700,22 @@ const Withdrawals = () => {
                     <Edit3 className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="mb-2">
-                  <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">XRPL payout</p>
+
+                {/* XRPL payout address */}
+                <div className={`mb-2 ${chain === 'xrpl' ? '' : 'opacity-60'}`}>
+                  <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">
+                    XRPL payout {chain === 'xrpl' && <span className="text-primary-400">· active</span>}
+                  </p>
                   <div className="flex items-center gap-2">
                     <code className="flex-1 text-xs text-gray-300 bg-dark-300 px-2 py-1.5 rounded font-mono truncate">
                       {owner.walletAddress || 'No address set'}
                     </code>
                     {owner.walletAddress && (
                       <button
-                        onClick={() => copyToClipboard(owner.walletAddress, `owner-${owner.id}`)}
+                        onClick={() => copyToClipboard(owner.walletAddress, `xrpl-${owner.id}`)}
                         className="p-1.5 rounded-lg bg-dark-300 hover:bg-dark-200 text-gray-400 hover:text-white transition-colors"
                       >
-                        {copiedKey === `owner-${owner.id}` ? (
+                        {copiedKey === `xrpl-${owner.id}` ? (
                           <Check className="w-3.5 h-3.5 text-green-400" />
                         ) : (
                           <Copy className="w-3.5 h-3.5" />
@@ -675,27 +724,41 @@ const Withdrawals = () => {
                     )}
                   </div>
                 </div>
-                <div className="mb-2">
-                  <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Phantom login</p>
-                  <code className="block text-xs text-gray-300 bg-dark-300 px-2 py-1.5 rounded font-mono truncate">
-                    {owner.solanaAddress || 'No Solana address set'}
-                  </code>
+
+                {/* Solana payout address */}
+                <div className={`mb-2 ${chain === 'solana' ? '' : 'opacity-60'}`}>
+                  <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">
+                    Solana payout {chain === 'solana' && <span className="text-primary-400">· active</span>}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs text-gray-300 bg-dark-300 px-2 py-1.5 rounded font-mono truncate">
+                      {owner.solanaAddress || 'No address set'}
+                    </code>
+                    {owner.solanaAddress && (
+                      <button
+                        onClick={() => copyToClipboard(owner.solanaAddress, `sol-${owner.id}`)}
+                        className="p-1.5 rounded-lg bg-dark-300 hover:bg-dark-200 text-gray-400 hover:text-white transition-colors"
+                      >
+                        {copiedKey === `sol-${owner.id}` ? (
+                          <Check className="w-3.5 h-3.5 text-green-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
+
                 <div className="flex items-center gap-2">
-                  {valid && isValidSolanaAddress(owner.solanaAddress) ? (
+                  {activeValid ? (
                     <>
                       <ShieldCheck className="w-4 h-4 text-green-400" />
-                      <span className="text-sm text-green-400">Authorized Signer &amp; Login</span>
-                    </>
-                  ) : valid ? (
-                    <>
-                      <ShieldAlert className="w-4 h-4 text-yellow-400" />
-                      <span className="text-sm text-yellow-400">No valid login wallet</span>
+                      <span className="text-sm text-green-400">Authorized Signer</span>
                     </>
                   ) : (
                     <>
                       <ShieldAlert className="w-4 h-4 text-yellow-400" />
-                      <span className="text-sm text-yellow-400">Invalid payout address</span>
+                      <span className="text-sm text-yellow-400">No valid {cfg.chainLabel} address</span>
                     </>
                   )}
                 </div>
@@ -736,12 +799,12 @@ const Withdrawals = () => {
                           <span className="text-gray-500 text-sm">requested a withdrawal</span>
                         </div>
                         <p className="text-2xl font-bold text-white mb-1">
-                          {dropsToXrp(wd.totalAmount)}{' '}
-                          <span className="text-sm text-gray-400 font-normal">XRP total</span>
+                          {fmt(wd.totalAmount)}{' '}
+                          <span className="text-sm text-gray-400 font-normal">{unit} total</span>
                         </p>
                         <p className="text-sm text-primary-300 mb-2 flex items-center gap-1.5">
                           <SplitSquareHorizontal className="w-4 h-4" />
-                          {dropsToXrp(wd.perOwnerAmount)} XRP to each of the {owners.length} owners
+                          {fmtUnit(wd.perOwnerAmount)} to each of the {owners.length} owners
                         </p>
                         <p className="text-sm text-gray-400 mb-2">{wd.reason}</p>
                         <div className="flex items-center gap-4 text-xs text-gray-500">
@@ -789,7 +852,7 @@ const Withdrawals = () => {
       <div className="rounded-xl bg-dark-300 border border-gray-800 overflow-hidden">
         <div className="p-5 border-b border-gray-800">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <h3 className="text-lg font-semibold text-white">Withdrawal History</h3>
+            <h3 className="text-lg font-semibold text-white">{cfg.chainLabel} Withdrawal History</h3>
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -872,10 +935,10 @@ const Withdrawals = () => {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-white text-sm font-medium">{dropsToXrp(wd.totalAmount)} XRP</span>
+                        <span className="text-white text-sm font-medium">{fmtUnit(wd.totalAmount)}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-primary-300 text-sm">{dropsToXrp(wd.perOwnerAmount)} XRP</span>
+                        <span className="text-primary-300 text-sm">{fmtUnit(wd.perOwnerAmount)}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -969,7 +1032,7 @@ const Withdrawals = () => {
             <div className="flex items-center justify-between p-5 border-b border-gray-800 sticky top-0 bg-dark-300">
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Send className="w-5 h-5 text-primary-400" />
-                Initiate Withdrawal
+                Initiate {cfg.chainLabel} Withdrawal
               </h3>
               <button
                 onClick={() => setShowInitiateModal(false)}
@@ -992,27 +1055,27 @@ const Withdrawals = () => {
                           <Icon className="w-4 h-4 text-primary-400" />
                           {w.label}
                         </span>
-                        <span className="text-gray-500">{dropsToXrp(w.balanceDrops)} XRP</span>
+                        <span className="text-gray-500">{fmtUnit(w.balanceBase)}</span>
                       </div>
                     )
                   })}
                 </div>
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-700 text-sm">
                   <span className="text-gray-400">Combined available</span>
-                  <span className="text-white font-semibold">
-                    {dropsToXrp(combinedBalance.toString())} XRP
-                  </span>
+                  <span className="text-white font-semibold">{fmtUnit(combinedBalance.toString())}</span>
                 </div>
               </div>
 
               {/* Amount */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Total Amount (XRP) *</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Total Amount ({unit}) *
+                </label>
                 <input
                   type="number"
                   value={initiateForm.amount}
                   onChange={(e) => setInitiateForm({ ...initiateForm, amount: e.target.value })}
-                  placeholder="Enter total amount to withdraw"
+                  placeholder={`Enter total amount in ${unit}`}
                   required
                   min="0.000001"
                   step="any"
@@ -1026,7 +1089,7 @@ const Withdrawals = () => {
               </div>
 
               {/* Equal split preview */}
-              {perOwnerXrp > 0 && (
+              {perOwnerDisplay > 0 && (
                 <div className="p-3 rounded-lg bg-primary-500/10 border border-primary-500/30">
                   <div className="flex items-center gap-2 mb-3">
                     <SplitSquareHorizontal className="w-4 h-4 text-primary-400" />
@@ -1040,22 +1103,13 @@ const Withdrawals = () => {
                           {owner.name}
                         </span>
                         <span className="text-white font-medium">
-                          {perOwnerXrp.toLocaleString('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}{' '}
-                          XRP
+                          {formatNumber(perOwnerDisplay)} {unit}
                         </span>
                       </div>
                     ))}
                   </div>
                   <p className="text-xs text-gray-500 mt-3">
-                    Each source wallet contributes ~
-                    {perSourceXrp.toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}{' '}
-                    XRP
+                    Each source wallet contributes ~{formatNumber(perSourceDisplay)} {unit}
                   </p>
                 </div>
               )}
@@ -1084,7 +1138,7 @@ const Withdrawals = () => {
                     <p className="text-gray-400 text-xs mt-1">
                       You ({currentOwner?.name}) sign now as the first of {requiredSignatures}{' '}
                       signatures. The other {owners.length - 1} owners must also sign before the funds
-                      are released.
+                      are released to the owners' {cfg.chainLabel} wallets.
                     </p>
                   </div>
                 </div>
@@ -1161,14 +1215,12 @@ const Withdrawals = () => {
                 <div className="space-y-2 mt-3">
                   <div className="flex justify-between">
                     <span className="text-gray-400 text-sm">Total Amount</span>
-                    <span className="text-white font-semibold">
-                      {dropsToXrp(selectedWithdrawal.totalAmount)} XRP
-                    </span>
+                    <span className="text-white font-semibold">{fmtUnit(selectedWithdrawal.totalAmount)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400 text-sm">To each owner</span>
                     <span className="text-primary-300 font-medium">
-                      {dropsToXrp(selectedWithdrawal.perOwnerAmount)} XRP
+                      {fmtUnit(selectedWithdrawal.perOwnerAmount)}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -1188,10 +1240,11 @@ const Withdrawals = () => {
                 <div className="flex items-start gap-2">
                   <ShieldCheck className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
                   <p className="text-green-400 text-sm">
-                    Signing as <strong>{currentOwner?.name}</strong> with your connected {walletLabel} wallet.{' '}
+                    Signing as <strong>{currentOwner?.name}</strong> with your connected {cfg.walletLabel}{' '}
+                    wallet.{' '}
                     {(selectedWithdrawal.signatures || []).length + 1 >=
                     (selectedWithdrawal.requiredSignatures || 3)
-                      ? `You are the final signer — this releases ${dropsToXrp(selectedWithdrawal.perOwnerAmount)} XRP to each owner.`
+                      ? `You are the final signer — this releases ${fmtUnit(selectedWithdrawal.perOwnerAmount)} to each owner.`
                       : `${(selectedWithdrawal.requiredSignatures || 3) - (selectedWithdrawal.signatures || []).length - 1} more signature(s) required after yours.`}
                   </p>
                 </div>
@@ -1262,9 +1315,7 @@ const Withdrawals = () => {
                     <p className="text-white font-medium">
                       {ownerById(selectedWithdrawal.initiatedBy)?.name}
                     </p>
-                    <p className="text-gray-500 text-sm">
-                      {dropsToXrp(selectedWithdrawal.totalAmount)} XRP total
-                    </p>
+                    <p className="text-gray-500 text-sm">{fmtUnit(selectedWithdrawal.totalAmount)} total</p>
                   </div>
                 </div>
                 <p className="text-sm text-gray-400">{selectedWithdrawal.reason}</p>
@@ -1347,7 +1398,7 @@ const Withdrawals = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                  XRPL Wallet Address * <span className="text-gray-500 font-normal">(withdrawal payout)</span>
+                  XRPL Wallet Address * <span className="text-gray-500 font-normal">(Xaman login + XRP payout)</span>
                 </label>
                 <input
                   type="text"
@@ -1361,20 +1412,17 @@ const Withdrawals = () => {
                     <AlertCircle className="w-3 h-3" /> Must be a valid XRPL r-address
                   </p>
                 )}
-                <p className="text-gray-500 text-xs mt-1">
-                  Receives an equal share of every withdrawal.
-                </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Solana Address * <span className="text-gray-500 font-normal">(Phantom login)</span>
+                  Solana Address * <span className="text-gray-500 font-normal">(Phantom login + SOL payout)</span>
                 </label>
                 <input
                   type="text"
                   value={ownerForm.solanaAddress}
                   onChange={(e) => setOwnerForm({ ...ownerForm, solanaAddress: e.target.value })}
-                  placeholder="Phantom wallet address..."
+                  placeholder="Solana wallet address..."
                   className="w-full px-3 py-2 rounded-lg bg-dark-400 border border-gray-700 text-white font-mono focus:outline-none focus:border-primary-500"
                 />
                 {ownerForm.solanaAddress && !isValidSolanaAddress(ownerForm.solanaAddress) && (
@@ -1383,7 +1431,7 @@ const Withdrawals = () => {
                   </p>
                 )}
                 <p className="text-gray-500 text-xs mt-1">
-                  Only this Phantom wallet can log in to the panel as this owner.
+                  Owners can log in and receive payouts on both chains. Both addresses are required.
                 </p>
               </div>
 
@@ -1435,11 +1483,11 @@ const Withdrawals = () => {
                 <StatusBadge status={selectedWithdrawal.status} />
                 <div className="text-right">
                   <p className="text-2xl font-bold text-white">
-                    {dropsToXrp(selectedWithdrawal.totalAmount)}{' '}
-                    <span className="text-sm text-gray-400 font-normal">XRP total</span>
+                    {fmt(selectedWithdrawal.totalAmount)}{' '}
+                    <span className="text-sm text-gray-400 font-normal">{unit} total</span>
                   </p>
                   <p className="text-sm text-primary-300">
-                    {dropsToXrp(selectedWithdrawal.perOwnerAmount)} XRP per owner
+                    {fmtUnit(selectedWithdrawal.perOwnerAmount)} per owner
                   </p>
                 </div>
               </div>
@@ -1480,7 +1528,7 @@ const Withdrawals = () => {
                     {(selectedWithdrawal.splits || []).map((s) => (
                       <div key={s.ownerId} className="flex items-center justify-between text-sm">
                         <span className="text-gray-300">{s.name || ownerById(s.ownerId)?.name}</span>
-                        <span className="text-white">{dropsToXrp(s.amount)} XRP</span>
+                        <span className="text-white">{fmtUnit(s.amount)}</span>
                       </div>
                     ))}
                   </div>
@@ -1491,7 +1539,7 @@ const Withdrawals = () => {
                     {(selectedWithdrawal.sourceBreakdown || []).map((s) => (
                       <div key={s.type} className="flex items-center justify-between text-sm">
                         <span className="text-gray-300">{s.label}</span>
-                        <span className="text-white">{dropsToXrp(s.amount)} XRP</span>
+                        <span className="text-white">{fmtUnit(s.amount)}</span>
                       </div>
                     ))}
                   </div>
@@ -1538,7 +1586,7 @@ const Withdrawals = () => {
                         <a
                           href="#"
                           className="p-1 rounded hover:bg-dark-300 text-gray-400 hover:text-white transition-colors flex-shrink-0"
-                          title="View on XRPL Explorer"
+                          title={`View on ${cfg.explorerName}`}
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
