@@ -128,6 +128,13 @@ const initials = (name) =>
     .slice(0, 2)
     .toUpperCase()
 
+// Signatures and transaction hashes may arrive as plain strings (ids / sigs)
+// or as objects, depending on the backend — normalize both.
+const sigOwnerId = (s) => (typeof s === 'string' ? s : s?.ownerId)
+const sigSignedAt = (s) => (typeof s === 'string' ? null : s?.signedAt)
+const txOwnerId = (tx) => (typeof tx === 'string' ? null : tx?.ownerId)
+const txHash = (tx) => (typeof tx === 'string' ? tx : tx?.hash)
+
 // ============================================
 // Helper Components
 // ============================================
@@ -210,7 +217,7 @@ const OwnerAvatar = ({ owner, size = 'md', dim = false }) => {
 // Three-owner signature progress
 const SignatureProgress = ({ withdrawal, owners }) => {
   const required = withdrawal.requiredSignatures || 3
-  const signedIds = (withdrawal.signatures || []).map((s) => s.ownerId)
+  const signedIds = (withdrawal.signatures || []).map(sigOwnerId)
   const rejected = withdrawal.status === 'rejected'
 
   return (
@@ -336,7 +343,7 @@ const Withdrawals = () => {
   const completedCount = withdrawals.filter((w) => w.status === 'completed').length
   const rejectedCount = withdrawals.filter((w) => w.status === 'rejected').length
 
-  const hasSigned = (wd, ownerId) => (wd.signatures || []).some((s) => s.ownerId === ownerId)
+  const hasSigned = (wd, ownerId) => (wd.signatures || []).some((s) => sigOwnerId(s) === ownerId)
 
   const myPendingSignatures = withdrawals.filter(
     (w) => w.status === 'pending_signatures' && currentOwner && !hasSigned(w, currentOwner.id)
@@ -574,10 +581,12 @@ const Withdrawals = () => {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-white">
-                {cfg.chainLabel} Revenue Source Wallets
+                {cfg.chainLabel} Source {sourceWallets.length === 1 ? 'Wallet' : 'Wallets'}
               </h3>
               <p className="text-sm text-gray-400">
-                Funds are pulled equally from these three platform wallets
+                {sourceWallets.length === 1
+                  ? 'Withdrawals are funded from the platform admin wallet'
+                  : 'Funds are pulled equally from these platform wallets'}
               </p>
             </div>
           </div>
@@ -1498,7 +1507,9 @@ const Withdrawals = () => {
                 <SignatureProgress withdrawal={selectedWithdrawal} owners={owners} />
                 <div className="mt-3 space-y-1.5">
                   {owners.map((owner) => {
-                    const sig = (selectedWithdrawal.signatures || []).find((s) => s.ownerId === owner.id)
+                    const sig = (selectedWithdrawal.signatures || []).find(
+                      (s) => sigOwnerId(s) === owner.id
+                    )
                     return (
                       <div key={owner.id} className="flex items-center justify-between text-sm">
                         <span className="flex items-center gap-2 text-gray-300">
@@ -1507,7 +1518,7 @@ const Withdrawals = () => {
                         </span>
                         {sig ? (
                           <span className="text-green-400 text-xs flex items-center gap-1">
-                            <Check className="w-3 h-3" /> Signed {formatDate(sig.signedAt)}
+                            <Check className="w-3 h-3" /> Signed {formatDate(sigSignedAt(sig))}
                           </span>
                         ) : (
                           <span className="text-gray-500 text-xs">
@@ -1567,31 +1578,36 @@ const Withdrawals = () => {
                 <div className="p-3 rounded-lg bg-dark-400 border border-gray-700">
                   <p className="text-xs text-gray-500 mb-2">Transaction Hashes</p>
                   <div className="space-y-2">
-                    {selectedWithdrawal.transactionHashes.map((tx) => (
-                      <div key={tx.ownerId} className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400 w-24 flex-shrink-0">
-                          {ownerById(tx.ownerId)?.name}
-                        </span>
-                        <code className="text-white text-xs font-mono truncate flex-1">{tx.hash}</code>
-                        <button
-                          onClick={() => copyToClipboard(tx.hash, `tx-${tx.ownerId}`)}
-                          className="p-1 rounded hover:bg-dark-300 text-gray-400 hover:text-white transition-colors flex-shrink-0"
-                        >
-                          {copiedKey === `tx-${tx.ownerId}` ? (
-                            <Check className="w-3.5 h-3.5 text-green-400" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                        <a
-                          href="#"
-                          className="p-1 rounded hover:bg-dark-300 text-gray-400 hover:text-white transition-colors flex-shrink-0"
-                          title={`View on ${cfg.explorerName}`}
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-                    ))}
+                    {selectedWithdrawal.transactionHashes.map((tx, i) => {
+                      const ownerId = txOwnerId(tx)
+                      const hash = txHash(tx)
+                      const key = ownerId || `tx-${i}`
+                      return (
+                        <div key={key} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-24 flex-shrink-0">
+                            {ownerId ? ownerById(ownerId)?.name : `Transfer ${i + 1}`}
+                          </span>
+                          <code className="text-white text-xs font-mono truncate flex-1">{hash}</code>
+                          <button
+                            onClick={() => copyToClipboard(hash, `tx-${key}`)}
+                            className="p-1 rounded hover:bg-dark-300 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                          >
+                            {copiedKey === `tx-${key}` ? (
+                              <Check className="w-3.5 h-3.5 text-green-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                          <a
+                            href="#"
+                            className="p-1 rounded hover:bg-dark-300 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                            title={`View on ${cfg.explorerName}`}
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -1610,13 +1626,13 @@ const Withdrawals = () => {
                     </div>
                   </div>
                   {(selectedWithdrawal.signatures || [])
-                    .filter((s) => s.ownerId !== selectedWithdrawal.initiatedBy)
+                    .filter((s) => sigOwnerId(s) !== selectedWithdrawal.initiatedBy)
                     .map((s) => (
-                      <div key={s.ownerId} className="flex items-start gap-3">
+                      <div key={sigOwnerId(s)} className="flex items-start gap-3">
                         <div className="w-2 h-2 rounded-full bg-green-400 mt-1.5 flex-shrink-0" />
                         <div>
-                          <p className="text-white text-sm">Signed by {ownerById(s.ownerId)?.name}</p>
-                          <p className="text-gray-500 text-xs">{formatDate(s.signedAt)}</p>
+                          <p className="text-white text-sm">Signed by {ownerById(sigOwnerId(s))?.name}</p>
+                          <p className="text-gray-500 text-xs">{formatDate(sigSignedAt(s))}</p>
                         </div>
                       </div>
                     ))}

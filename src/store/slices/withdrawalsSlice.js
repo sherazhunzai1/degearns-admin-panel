@@ -127,17 +127,50 @@ const randomTxHash = (chain) => {
   return Array.from({ length: 64 }, () => '0123456789ABCDEF'[Math.floor(Math.random() * 16)]).join('')
 }
 
-const normalizeSourceWallets = (chain, wallets) =>
-  SOURCE_WALLET_TYPES.map((src) => {
-    const match = wallets.find((w) => w.type === src.type)
-    if (!match) return { ...src, walletAddress: null, balanceBase: '0', configured: false }
-    return {
-      ...src,
-      ...match,
-      balanceBase: match.balanceBase ?? match.balanceDrops ?? match.balanceLamports ?? '0',
-      configured: Boolean(match.walletAddress),
-    }
-  })
+const normalizeSourceWallets = (chain, wallets) => {
+  const pickAddress = (w) => w.walletAddress || w.address || w.publicKey || null
+  const pickBalance = (w) =>
+    String(w.balanceBase ?? w.balanceLamports ?? w.balanceDrops ?? w.balance ?? w.lamports ?? '0')
+
+  // Typed model (XRPL): minting / treasury / subscriptions — always show all three.
+  const hasTyped = SOURCE_WALLET_TYPES.some((s) => wallets.some((w) => w.type === s.type))
+  if (hasTyped) {
+    return SOURCE_WALLET_TYPES.map((src) => {
+      const match = wallets.find((w) => w.type === src.type)
+      if (!match) return { ...src, walletAddress: null, balanceBase: '0', configured: false }
+      return {
+        ...src,
+        ...match,
+        walletAddress: pickAddress(match),
+        balanceBase: pickBalance(match),
+        configured: Boolean(pickAddress(match)),
+      }
+    })
+  }
+
+  // Generic / single-admin-wallet model (Solana backend funds payouts from one
+  // admin wallet) — show whatever the backend returns.
+  return wallets.map((w, i) => ({
+    type: w.type || (wallets.length === 1 ? 'admin' : `source-${i}`),
+    label: w.label || 'Admin Wallet',
+    description: w.description || 'Platform admin wallet that funds withdrawals',
+    walletAddress: pickAddress(w),
+    balanceBase: pickBalance(w),
+    configured: Boolean(pickAddress(w)),
+  }))
+}
+
+// Pull the source-wallet array out of the various response shapes the backend
+// may use (array, { wallets: [] }, { wallet: {} }, or a single wallet object).
+const extractSourceWallets = (data) => {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data.wallets)) return data.wallets
+  if (Array.isArray(data.sourceWallets)) return data.sourceWallets
+  if (data.wallet) return [data.wallet]
+  if (data.walletAddress || data.address || data.publicKey) return [data]
+  return []
+}
 
 // ============================================
 // Async Thunks (API first, localStorage fallback)
@@ -188,8 +221,8 @@ export const fetchSourceWallets = createAsyncThunk(
   async (chain = 'xrpl') => {
     try {
       const response = await withdrawalsAPI.getSourceWallets(chain)
-      const wallets = response.data?.data?.wallets || response.data?.data || []
-      if (Array.isArray(wallets) && wallets.length > 0) {
+      const wallets = extractSourceWallets(response.data?.data)
+      if (wallets.length > 0) {
         return normalizeSourceWallets(chain, wallets)
       }
       return DEFAULT_SOURCE_WALLETS_BY_CHAIN[chain] || DEFAULT_SOURCE_WALLETS_BY_CHAIN.xrpl
