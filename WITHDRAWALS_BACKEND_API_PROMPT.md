@@ -24,13 +24,16 @@ There are **three owners**. Each owner has:
 - an XRPL wallet address (`walletAddress`) — the **withdrawal destination**, and
 - a Solana wallet address (`solanaAddress`) — the **admin-panel login identity**.
 
-> **Login allowlist (Phantom / Solana):** admin-panel login is done with the
-> **Phantom** wallet (Solana). The three owner Solana wallets are the *only*
-> wallets allowed to log in. The frontend reads the allowlist from the public
-> endpoint **`GET /admin/withdrawals/owners/solana/public`** (no auth token —
-> it is called before login) and rejects any connected Phantom wallet that is
-> not in it. Enforce this server-side too: reject authentication for any
-> non-owner Solana wallet.
+> **Login allowlist (Phantom *or* Xaman):** admin-panel login can be done with
+> either the **Phantom** wallet (Solana, matched on `solanaAddress`) or the
+> **Xaman** wallet (XRPL, matched on `walletAddress`). In both cases the three
+> owners are the *only* wallets allowed in. The frontend reads each allowlist
+> from a public endpoint (no auth token — called before login):
+> - **`GET /admin/withdrawals/owners/solana/public`** → Phantom login allowlist
+> - **`GET /admin/withdrawals/owners/xrpl/public`** → Xaman login allowlist
+>
+> Reject any connected wallet that is not in the relevant list. Enforce this
+> server-side too: reject authentication for any non-owner wallet on either chain.
 
 A withdrawal works like this:
 
@@ -126,8 +129,8 @@ table to record the on-chain transaction per owner once executed.
 ### 4.1 Owner Management
 
 #### `GET /admin/withdrawals/owners/solana/public` 🔓 public (no auth)
-**Login allowlist.** Returns the owners' Solana addresses so the frontend can
-gate Phantom login before any token exists. Return only non-sensitive fields.
+**Phantom login allowlist.** Returns the owners' Solana addresses so the
+frontend can gate Phantom login before any token exists. Non-sensitive fields only.
 
 **Response `data`:**
 ```json
@@ -136,6 +139,21 @@ gate Phantom login before any token exists. Return only non-sensitive fields.
     { "id": "owner1", "name": "Constantinos", "solanaAddress": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" },
     { "id": "owner2", "name": "Aristides",    "solanaAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" },
     { "id": "owner3", "name": "Demetrios",    "solanaAddress": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" }
+  ]
+}
+```
+
+#### `GET /admin/withdrawals/owners/xrpl/public` 🔓 public (no auth)
+**Xaman login allowlist.** Returns the owners' XRPL addresses so the frontend
+can gate Xaman login before any token exists. Non-sensitive fields only.
+
+**Response `data`:**
+```json
+{
+  "owners": [
+    { "id": "owner1", "name": "Constantinos", "walletAddress": "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" },
+    { "id": "owner2", "name": "Aristides",    "walletAddress": "rN7n3gSFtdKkAzQhS3vvWFx6P7JzSNGiNj" },
+    { "id": "owner3", "name": "Demetrios",    "walletAddress": "rsP3mgGb2tcYUrxiLFiHJiQXhsKegYpnQp" }
   ]
 }
 ```
@@ -354,6 +372,7 @@ The admin panel calls these methods (see `src/services/api.js`):
 | Method | HTTP |
 |--------|------|
 | `withdrawalsAPI.getSolanaOwnersPublic()` | `GET /admin/withdrawals/owners/solana/public` (public — Phantom login allowlist) |
+| `withdrawalsAPI.getXrplOwnersPublic()` | `GET /admin/withdrawals/owners/xrpl/public` (public — Xaman login allowlist) |
 | `withdrawalsAPI.getOwners()` | `GET /admin/withdrawals/owners` |
 | `withdrawalsAPI.saveOwner({id?, name, walletAddress, solanaAddress})` | `POST` (create) / `PUT /:id` (update) |
 | `withdrawalsAPI.deleteOwner(id)` | `DELETE /admin/withdrawals/owners/:id` |

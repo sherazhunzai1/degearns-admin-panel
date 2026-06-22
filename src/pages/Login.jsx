@@ -1,8 +1,9 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Wallet, Shield, ArrowRight, AlertCircle, Ghost, Loader2, RefreshCw, ExternalLink } from 'lucide-react'
+import { Wallet, Shield, AlertCircle, Ghost, Loader2, RefreshCw, ExternalLink } from 'lucide-react'
 import {
   loginWithPhantom,
+  loginWithXaman,
   clearError,
   resetLoginState,
 } from '../store/slices/authSlice'
@@ -15,16 +16,28 @@ const Login = () => {
     loginStep,
   } = useSelector((state) => state.auth)
 
-  const handleConnectWallet = useCallback(async () => {
+  // Track which wallet the user is connecting with (for the connecting copy)
+  const [connectingWith, setConnectingWith] = useState(null)
+
+  const handleConnectPhantom = useCallback(() => {
+    setConnectingWith('phantom')
     dispatch(clearError())
     dispatch(loginWithPhantom())
   }, [dispatch])
 
+  const handleConnectXaman = useCallback(() => {
+    setConnectingWith('xaman')
+    dispatch(clearError())
+    dispatch(loginWithXaman())
+  }, [dispatch])
+
   const handleRetry = useCallback(() => {
+    setConnectingWith(null)
     dispatch(resetLoginState())
   }, [dispatch])
 
   const isConnecting = loginStep === 'connecting'
+  const walletName = connectingWith === 'xaman' ? 'Xaman' : 'Phantom'
 
   return (
     <div className="min-h-screen bg-dark-500 flex items-center justify-center p-4">
@@ -50,8 +63,8 @@ const Login = () => {
             <h2 className="text-xl font-semibold text-white mb-2">Admin Login</h2>
             <p className="text-gray-400 text-sm">
               {isConnecting
-                ? 'Approve the connection and sign-in request in Phantom...'
-                : 'Connect your Phantom wallet to access the admin dashboard'
+                ? `Approve the request in ${walletName} to continue...`
+                : 'Connect an owner wallet to access the admin dashboard'
               }
             </p>
           </div>
@@ -78,14 +91,15 @@ const Login = () => {
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary-500/20 flex items-center justify-center animate-pulse">
                 <Loader2 className="w-10 h-10 text-primary-400 animate-spin" />
               </div>
-              <p className="text-white font-medium mb-2">Connecting to Phantom...</p>
+              <p className="text-white font-medium mb-2">Connecting to {walletName}...</p>
               <p className="text-gray-400 text-sm mb-6">
-                The Phantom extension should open. Approve the connection, then sign the sign-in
-                message to continue.
+                {connectingWith === 'xaman'
+                  ? 'A popup should appear. Scan the QR code or approve the request in your Xaman app.'
+                  : 'The Phantom extension should open. Approve the connection, then sign the sign-in message.'}
               </p>
               <div className="flex items-center justify-center gap-2 text-yellow-400 text-sm">
                 <AlertCircle className="w-4 h-4" />
-                <span>Don't see the popup? Open the Phantom extension manually.</span>
+                <span>Don't see the popup? Check your wallet extension or popup blocker.</span>
               </div>
             </div>
           ) : (
@@ -100,46 +114,74 @@ const Login = () => {
                 </div>
                 <div className="flex items-center gap-3 text-gray-300">
                   <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-                    <Wallet className="w-4 h-4 text-green-400" />
+                    <Shield className="w-4 h-4 text-green-400" />
                   </div>
                   <span className="text-sm">Owner-only wallet access</span>
                 </div>
                 <div className="flex items-center gap-3 text-gray-300">
                   <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                    <Ghost className="w-4 h-4 text-purple-400" />
+                    <Wallet className="w-4 h-4 text-purple-400" />
                   </div>
-                  <span className="text-sm">Sign in with Solana Phantom wallet</span>
+                  <span className="text-sm">Sign in with Phantom (Solana) or Xaman (XRPL)</span>
                 </div>
               </div>
 
-              {/* Connect Button */}
-              <button
-                onClick={handleConnectWallet}
-                disabled={loginLoading}
-                className="w-full py-4 px-6 gradient-bg rounded-xl text-white font-semibold
-                         flex items-center justify-center gap-3 hover:opacity-90 transition-opacity
-                         disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary-500/30"
-              >
-                {loginLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>
-                    <Ghost className="w-5 h-5" />
-                    Connect Phantom Wallet
-                    <ArrowRight className="w-5 h-5" />
-                  </>
-                )}
-              </button>
+              {/* Connect Buttons */}
+              <div className="space-y-3">
+                <button
+                  onClick={handleConnectPhantom}
+                  disabled={loginLoading}
+                  className="w-full py-4 px-6 gradient-bg rounded-xl text-white font-semibold
+                           flex items-center justify-center gap-3 hover:opacity-90 transition-opacity
+                           disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary-500/30"
+                >
+                  {loginLoading && connectingWith === 'phantom' ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Ghost className="w-5 h-5" />
+                      Connect Phantom Wallet
+                    </>
+                  )}
+                </button>
 
-              {/* Phantom App Link */}
-              <div className="mt-4 text-center">
+                <button
+                  onClick={handleConnectXaman}
+                  disabled={loginLoading}
+                  className="w-full py-4 px-6 bg-dark-300 border border-gray-700 rounded-xl text-white font-semibold
+                           flex items-center justify-center gap-3 hover:bg-dark-200 transition-colors
+                           disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loginLoading && connectingWith === 'xaman' ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Wallet className="w-5 h-5" />
+                      Connect Xaman Wallet
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Install Links */}
+              <div className="mt-4 flex items-center justify-center gap-4 text-sm">
                 <a
                   href="https://phantom.app/download"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-gray-400 text-sm hover:text-primary-400 transition-colors"
+                  className="inline-flex items-center gap-1 text-gray-400 hover:text-primary-400 transition-colors"
                 >
-                  Don't have Phantom?
+                  Get Phantom
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+                <span className="text-gray-700">·</span>
+                <a
+                  href="https://xumm.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-gray-400 hover:text-primary-400 transition-colors"
+                >
+                  Get Xaman
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
@@ -151,22 +193,6 @@ const Login = () => {
         <p className="text-center text-gray-500 text-sm mt-6">
           Only the three platform owner wallets can access this panel
         </p>
-
-        {/* Setup Instructions */}
-        <div className="mt-6 p-4 rounded-xl bg-dark-400/50 border border-gray-800">
-          <p className="text-gray-400 text-xs text-center">
-            <strong className="text-gray-300">Note:</strong> Install the Phantom wallet from{' '}
-            <a
-              href="https://phantom.app/download"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary-400 hover:underline"
-            >
-              phantom.app
-            </a>
-            {' '}and connect with one of the registered owner wallets to sign in.
-          </p>
-        </div>
       </div>
     </div>
   )

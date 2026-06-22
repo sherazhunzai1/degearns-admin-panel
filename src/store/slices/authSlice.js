@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import phantomService from '../../services/phantom'
-import { isAuthorizedSolanaOwnerSync } from '../../services/owners'
+import xamanService from '../../services/xaman'
+import { isAuthorizedSolanaOwnerSync, isAuthorizedOwnerSync } from '../../services/owners'
 
 // Check for existing auth on load
 const getInitialState = () => {
@@ -14,9 +15,12 @@ const getInitialState = () => {
     localStorage.removeItem('degearns_admin_user')
   }
 
-  // Only the three platform owners may hold a session. Clear any stale or
-  // non-owner session (e.g. a legacy demo / Xaman login) before restoring it.
-  if (user && !isAuthorizedSolanaOwnerSync(user.address)) {
+  // Only the three platform owners may hold a session. A session is valid if
+  // the wallet matches an owner on either chain (Phantom/Solana or Xaman/XRPL).
+  // Clear any stale or non-owner session (e.g. a legacy demo login).
+  const isOwnerSession =
+    user && (isAuthorizedSolanaOwnerSync(user.address) || isAuthorizedOwnerSync(user.address))
+  if (user && !isOwnerSession) {
     localStorage.removeItem('degearns_admin_token')
     localStorage.removeItem('degearns_admin_user')
     user = null
@@ -53,24 +57,48 @@ export const loginWithPhantom = createAsyncThunk(
   }
 )
 
-// Async thunk to check existing auth
+// Async thunk to login with Xaman (XRPL) wallet
+export const loginWithXaman = createAsyncThunk(
+  'auth/loginWithXaman',
+  async (_, { rejectWithValue }) => {
+    try {
+      const result = await xamanService.initiateLogin()
+
+      if (!result.success) {
+        return rejectWithValue(result.error || 'Login failed')
+      }
+
+      return result
+    } catch (error) {
+      return rejectWithValue(error.message || 'Failed to connect to Xaman wallet')
+    }
+  }
+)
+
+// Async thunk to check existing auth (try both wallets)
 export const checkExistingAuth = createAsyncThunk(
   'auth/checkExistingAuth',
   async (_, { rejectWithValue }) => {
     try {
-      const result = await phantomService.checkExistingAuth()
-      return result
+      const phantomResult = await phantomService.checkExistingAuth()
+      if (phantomResult.authenticated) return phantomResult
+      return await xamanService.checkExistingAuth()
     } catch (error) {
       return rejectWithValue(error.message || 'Failed to check authentication')
     }
   }
 )
 
-// Async thunk to logout
+// Async thunk to logout (disconnect whichever wallet is connected)
 export const logout = createAsyncThunk(
   'auth/logout',
-  async () => {
-    await phantomService.logout()
+  async (_, { getState }) => {
+    const chain = getState()?.auth?.user?.chain
+    if (chain === 'xrpl') {
+      await xamanService.logout()
+    } else {
+      await phantomService.logout()
+    }
     return null
   }
 )
@@ -108,6 +136,26 @@ const authSlice = createSlice({
         state.error = null
       })
       .addCase(loginWithPhantom.rejected, (state, action) => {
+        state.loginLoading = false
+        state.error = action.payload || 'Login failed'
+        state.loginStep = 'error'
+      })
+
+      // Login with Xaman
+      .addCase(loginWithXaman.pending, (state) => {
+        state.loginLoading = true
+        state.error = null
+        state.loginStep = 'connecting'
+      })
+      .addCase(loginWithXaman.fulfilled, (state, action) => {
+        state.loginLoading = false
+        state.user = action.payload.user
+        state.token = action.payload.token
+        state.isAuthenticated = true
+        state.loginStep = 'success'
+        state.error = null
+      })
+      .addCase(loginWithXaman.rejected, (state, action) => {
         state.loginLoading = false
         state.error = action.payload || 'Login failed'
         state.loginStep = 'error'

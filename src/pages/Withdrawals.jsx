@@ -246,6 +246,9 @@ const Withdrawals = () => {
     findOwnerByAddress(user?.address, owners) ||
     null
 
+  // Which wallet the connected owner signed in with
+  const walletLabel = user?.chain === 'xrpl' ? 'Xaman' : 'Phantom'
+
   // Modal states
   const [showInitiateModal, setShowInitiateModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
@@ -456,7 +459,7 @@ const Withdrawals = () => {
             <div className="flex items-center gap-3">
               <OwnerAvatar owner={currentOwner} size="lg" />
               <div>
-                <p className="text-sm text-gray-400">Connected Phantom wallet · authorized owner</p>
+                <p className="text-sm text-gray-400">Connected {walletLabel} wallet · authorized owner</p>
                 <p className="text-white font-medium">{currentOwner.name}</p>
               </div>
             </div>
@@ -1185,7 +1188,7 @@ const Withdrawals = () => {
                 <div className="flex items-start gap-2">
                   <ShieldCheck className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
                   <p className="text-green-400 text-sm">
-                    Signing as <strong>{currentOwner?.name}</strong> with your connected Phantom wallet.{' '}
+                    Signing as <strong>{currentOwner?.name}</strong> with your connected {walletLabel} wallet.{' '}
                     {(selectedWithdrawal.signatures || []).length + 1 >=
                     (selectedWithdrawal.requiredSignatures || 3)
                       ? `You are the final signer — this releases ${dropsToXrp(selectedWithdrawal.perOwnerAmount)} XRP to each owner.`

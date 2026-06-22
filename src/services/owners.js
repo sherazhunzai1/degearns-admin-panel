@@ -79,10 +79,16 @@ export const findOwnerByAddress = (address, owners) => {
 
 export const getKnownOwnersSync = () => readStored(OWNERS_STORAGE_KEY) || DEFAULT_OWNERS
 
-// Authoritative owner list (with XRPL addresses): database first, then local.
-export const getAuthorizedOwners = async () => {
+// Synchronous check used to gate a restored Xaman (XRPL) session at load time.
+export const isAuthorizedOwnerSync = (address) =>
+  Boolean(findOwnerByAddress(address, getKnownOwnersSync()))
+
+// Authoritative XRPL login allowlist: public endpoint first, then local.
+// Called at login time (no auth token), so it usually falls through to the
+// locally-known list.
+export const getXrplAuthorizedOwners = async () => {
   try {
-    const response = await withdrawalsAPI.getOwners()
+    const response = await withdrawalsAPI.getXrplOwnersPublic()
     const owners = response.data?.data?.owners || response.data?.data || []
     if (Array.isArray(owners) && owners.length > 0) {
       writeStored(OWNERS_STORAGE_KEY, owners)

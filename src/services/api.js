@@ -743,6 +743,10 @@ export const withdrawalsAPI = {
   // allowlist for Phantom wallet authentication (no auth token required).
   getSolanaOwnersPublic: () => api.get('/admin/withdrawals/owners/solana/public'),
 
+  // Public list of owner XRPL wallet addresses — used as the login
+  // allowlist for Xaman wallet authentication (no auth token required).
+  getXrplOwnersPublic: () => api.get('/admin/withdrawals/owners/xrpl/public'),
+
   // ============ Source Wallets ============
 
   // Get the three platform revenue source wallets (minting, treasury,
