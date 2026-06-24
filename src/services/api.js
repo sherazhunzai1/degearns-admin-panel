@@ -796,6 +796,43 @@ export const withdrawalsAPI = {
 }
 
 // ============================================
+// Multi-Sig Owner Change Request APIs
+// ============================================
+// Owners can propose removing an owner and replacing them with a new wallet.
+// Requires 2-of-3 signatures from the remaining owners. Per network (xrpl /
+// solana). See the owner-change feature for the full contract.
+export const ownerChangesAPI = {
+  // List change requests for a network (optionally filtered by status)
+  list: (params = {}) => {
+    const { network = 'xrpl', status, page = 1, limit = 20 } = params
+    return api.get('/admin/withdrawals/owner-changes', {
+      params: { network, status, page, limit },
+    })
+  },
+
+  // Propose removing `targetOwnerId` and creating a new owner. Auto-signs the
+  // initiator.
+  create: (data) => {
+    const { network, targetOwnerId, newOwnerName, newOwnerWallet, initiatedBy } = data
+    return api.post('/admin/withdrawals/owner-changes', {
+      network,
+      targetOwnerId,
+      newOwnerName,
+      newOwnerWallet,
+      initiatedBy,
+    })
+  },
+
+  // Add a signature. On the 2nd signature the old owner is deactivated and the
+  // new owner is created.
+  sign: (id, ownerId) => api.post(`/admin/withdrawals/owner-changes/${id}/sign`, { ownerId }),
+
+  // Reject a pending change request (any active owner, including the target)
+  reject: (id, ownerId, reason) =>
+    api.post(`/admin/withdrawals/owner-changes/${id}/reject`, { ownerId, reason }),
+}
+
+// ============================================
 // Leaderboard APIs (Public)
 // ============================================
 export const leaderboardAPI = {

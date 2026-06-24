@@ -14,6 +14,7 @@ import treasuryReducer from './slices/treasurySlice'
 import rewardsDistributionReducer from './slices/rewardsDistributionSlice'
 import subscriptionsReducer from './slices/subscriptionsSlice'
 import withdrawalsReducer from './slices/withdrawalsSlice'
+import ownerChangesReducer from './slices/ownerChangesSlice'
 
 export const store = configureStore({
   reducer: {
@@ -32,6 +33,7 @@ export const store = configureStore({
     rewardsDistribution: rewardsDistributionReducer,
     subscriptions: subscriptionsReducer,
     withdrawals: withdrawalsReducer,
+    ownerChanges: ownerChangesReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -19,7 +19,8 @@ import {
   Image,
   Gift,
   Crown,
-  ArrowUpRight
+  ArrowUpRight,
+  UserCog
 } from 'lucide-react'
 
 const Layout = () => {
@@ -54,6 +55,7 @@ const Layout = () => {
     { name: 'Rewards', href: '/rewards', icon: Gift },
     { name: 'Subscriptions', href: '/subscriptions', icon: Crown },
     { name: 'Withdrawals', href: '/withdrawals', icon: ArrowUpRight },
+    { name: 'Owners', href: '/owners', icon: UserCog },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 

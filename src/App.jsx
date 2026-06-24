@@ -17,6 +17,7 @@ import Fees from "./pages/Fees";
 import Rewards from "./pages/Rewards";
 import Subscriptions from "./pages/Subscriptions";
 import Withdrawals from "./pages/Withdrawals";
+import OwnerManagement from "./pages/OwnerManagement";
 import Settings from "./pages/Settings";
 
 // Protected Route Component
@@ -89,6 +90,7 @@ function App() {
           <Route path="rewards" element={<Rewards />} />
           <Route path="subscriptions" element={<Subscriptions />} />
           <Route path="withdrawals" element={<Withdrawals />} />
+          <Route path="owners" element={<OwnerManagement />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 
