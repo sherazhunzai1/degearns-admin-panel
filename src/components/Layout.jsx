@@ -83,7 +83,7 @@ const Layout = () => {
         }`}
       >
         {/* Logo */}
-        <div className="p-4 flex items-center justify-between border-b border-gray-800">
+        <div className="p-4 flex items-center justify-between border-b border-gray-800 flex-shrink-0">
           <div className={`flex items-center gap-3 ${!sidebarOpen && 'justify-center w-full'}`}>
             <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center flex-shrink-0">
               <span className="text-lg font-bold text-white">DG</span>
@@ -104,7 +104,7 @@ const Layout = () => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
           {navigation.map((item) => (
             <NavLink
               key={item.name}
@@ -137,7 +137,7 @@ const Layout = () => {
         )}
 
         {/* User section */}
-        <div className={`p-4 border-t border-gray-800 ${!sidebarOpen && 'flex flex-col items-center'}`}>
+        <div className={`p-4 border-t border-gray-800 flex-shrink-0 ${!sidebarOpen && 'flex flex-col items-center'}`}>
           {sidebarOpen ? (
             <div className="flex items-center gap-3 mb-3 p-3 rounded-xl bg-dark-300">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center">
@@ -182,12 +182,12 @@ const Layout = () => {
 
         {/* Sidebar */}
         <aside
-          className={`absolute left-0 top-0 h-full w-64 bg-dark-400 border-r border-gray-800 transition-transform ${
+          className={`absolute left-0 top-0 h-full w-64 bg-dark-400 border-r border-gray-800 flex flex-col transition-transform ${
             mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
           {/* Logo */}
-          <div className="p-4 flex items-center justify-between border-b border-gray-800">
+          <div className="p-4 flex items-center justify-between border-b border-gray-800 flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
                 <span className="text-lg font-bold text-white">DG</span>
@@ -206,7 +206,7 @@ const Layout = () => {
           </div>
 
           {/* Navigation */}
-          <nav className="p-4 space-y-2">
+          <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
             {navigation.map((item) => (
               <NavLink
                 key={item.name}
@@ -227,7 +227,7 @@ const Layout = () => {
           </nav>
 
           {/* User section */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-800">
+          <div className="p-4 border-t border-gray-800 flex-shrink-0">
             <div className="flex items-center gap-3 mb-3 p-3 rounded-xl bg-dark-300">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center">
                 <Wallet className="w-5 h-5 text-white" />
