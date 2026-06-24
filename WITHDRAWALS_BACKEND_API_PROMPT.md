@@ -13,11 +13,13 @@
 
 ## 1. Feature Overview
 
-The platform collects revenue into **three source wallets**:
+The platform collects revenue into a **single platform revenue wallet** (the
+admin wallet from `.env`) that funds withdrawals.
 
-1. **Platform Minting Wallet** — revenue from NFT minting
-2. **Treasury Wallet** — platform treasury revenue
-3. **Subscriptions Wallet** — subscription revenue
+> **Note:** this originally described three source wallets (minting, treasury,
+> subscriptions). The deployed backend was simplified to one revenue wallet —
+> see §4.2. The equal-split-to-3-owners and 3-of-3 signing are unchanged; only
+> the funding source collapsed from three wallets to one.
 
 There are **three owners**. Each owner has:
 - a name,
@@ -193,46 +195,35 @@ Remove an owner. **Response:** `{ "success": true }`
 
 ### 4.2 Source Wallets
 
+> **Deployed model:** the backend now funds XRPL withdrawals from a **single
+> platform revenue wallet** (the admin wallet from `.env`), not the original
+> minting/treasury/subscriptions trio. The endpoint returns a one-item array.
+> The frontend renders whatever wallets are returned (1 or many), so either
+> shape works.
+
 #### `GET /admin/withdrawals/source-wallets`
-Returns the three revenue source wallets with **live balances** (query the
-XRPL for each address). The frontend expects all three `type` values to be
-present; if one is not configured, return it with `configured: false`.
+Returns the platform revenue source wallet(s) with **live balances** (query the
+XRPL for each address). `balanceDrops` (or `balanceBase`) is in drops.
 
 **Response `data`:**
 ```json
 {
   "wallets": [
     {
-      "type": "minting",
-      "label": "Platform Minting Wallet",
-      "description": "Collects revenue from NFT minting",
-      "walletAddress": "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
-      "balanceDrops": "1250000000000",
-      "configured": true
-    },
-    {
-      "type": "treasury",
-      "label": "Treasury Wallet",
-      "description": "Collects platform treasury revenue",
-      "walletAddress": "rsXw...",
-      "balanceDrops": "820000000000",
-      "configured": true
-    },
-    {
-      "type": "subscriptions",
-      "label": "Subscriptions Wallet",
-      "description": "Collects subscription revenue",
-      "walletAddress": "rJ4m...",
-      "balanceDrops": "380000000000",
+      "type": "revenue",
+      "label": "Platform Revenue Wallet",
+      "description": "Collects all platform fees from XRP transactions",
+      "walletAddress": "r8Ax6s9QUFh3hjQ3e9hndJX964g55g7Wv",
+      "balanceDrops": "1250000000",
       "configured": true
     }
   ]
 }
 ```
 
-> **`type` must be one of `minting`, `treasury`, `subscriptions`.** These are
-> the keys the frontend uses to render and icon each source. Map each to the
-> appropriate stored wallet in your system.
+> The frontend keys icons off `type` (`revenue` → general wallet icon). If you
+> later split the source back into multiple typed wallets, the page will show
+> each one and split equally across them.
 
 ---
 

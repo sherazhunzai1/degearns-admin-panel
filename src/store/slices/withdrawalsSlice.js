@@ -36,19 +36,16 @@ export const SOURCE_WALLET_TYPES = [
 
 // ---------------------------------------------
 // Default / seed data (used until the backend is wired up).
+// Both chains now fund withdrawals from a single platform revenue wallet.
 // `balanceBase` is in the chain's base unit (drops for XRPL, lamports for Solana).
 // DEFAULT_OWNERS lives in services/owners.js (shared with the auth layer).
 // ---------------------------------------------
 const DEFAULT_SOURCE_WALLETS_BY_CHAIN = {
   xrpl: [
-    { type: 'minting', label: 'Platform Minting Wallet', description: 'Collects revenue from NFT minting', walletAddress: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh', balanceBase: '1250000000000', configured: true },
-    { type: 'treasury', label: 'Treasury Wallet', description: 'Collects platform treasury revenue', walletAddress: 'rsXwGQP9YQ9Fb3kL2mNvCpXqYtZ8KdR5wT', balanceBase: '820000000000', configured: true },
-    { type: 'subscriptions', label: 'Subscriptions Wallet', description: 'Collects subscription revenue', walletAddress: 'rJ4mK2nP8qVxW7sT3yBhLcXdZ9eR6uA2gN', balanceBase: '380000000000', configured: true },
+    { type: 'revenue', label: 'Platform Revenue Wallet', description: 'Collects all platform fees from XRP transactions', walletAddress: 'r8Ax6s9QUFh3hjQ3e9hndJX964g55g7Wv', balanceBase: '1250000000', configured: true },
   ],
   solana: [
-    { type: 'minting', label: 'Platform Minting Wallet', description: 'Collects revenue from NFT minting', walletAddress: '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1', balanceBase: '1200000000000', configured: true },
-    { type: 'treasury', label: 'Treasury Wallet', description: 'Collects platform treasury revenue', walletAddress: '8FE27ioQh3T7o22QsYVT5Re8NnHFqmFNbdqwiF3ywuZQ', balanceBase: '850000000000', configured: true },
-    { type: 'subscriptions', label: 'Subscriptions Wallet', description: 'Collects subscription revenue', walletAddress: '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E', balanceBase: '430000000000', configured: true },
+    { type: 'revenue', label: 'Platform Revenue Wallet', description: 'Collects all platform revenue on Solana', walletAddress: '5WkwmtHvMQbjt3HXkey71iH3VxtSQ9n1Y9FLdKmC7AH9', balanceBase: '5000000000', configured: true },
   ],
 }
 

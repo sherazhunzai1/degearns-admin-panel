@@ -44,8 +44,12 @@ import {
 } from '../store/slices/withdrawalsSlice'
 import { findOwnerByAddress, findOwnerBySolanaAddress } from '../services/owners'
 
-// Icons for the three revenue source wallets
+// Icons for the revenue source wallets (single revenue wallet per chain, with
+// legacy typed wallets still supported as a fallback)
 const SOURCE_ICONS = {
+  revenue: Coins,
+  solana_revenue: Coins,
+  admin: Wallet,
   minting: Coins,
   treasury: Vault,
   subscriptions: Crown,
@@ -591,7 +595,7 @@ const Withdrawals = () => {
               </h3>
               <p className="text-sm text-gray-400">
                 {sourceWallets.length === 1
-                  ? 'Withdrawals are funded from the platform admin wallet'
+                  ? `Withdrawals are funded from the ${sourceWallets[0]?.label || 'platform revenue wallet'}`
                   : 'Funds are pulled equally from these platform wallets'}
               </p>
             </div>
@@ -1123,9 +1127,11 @@ const Withdrawals = () => {
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-gray-500 mt-3">
-                    Each source wallet contributes ~{formatNumber(perSourceDisplay)} {unit}
-                  </p>
+                  {sourceWallets.length > 1 && (
+                    <p className="text-xs text-gray-500 mt-3">
+                      Each source wallet contributes ~{formatNumber(perSourceDisplay)} {unit}
+                    </p>
+                  )}
                 </div>
               )}
 
